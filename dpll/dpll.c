@@ -715,6 +715,9 @@ static void cmd_pin_help(void)
 	pr_err("                               [ direction { input | output } ]\n");
 	pr_err("                               [ prio PRIO ]\n");
 	pr_err("                               [ state { connected | disconnected | selectable } ]\n");
+	pr_err("                               [ parent-device DEVICE_ID [ direction DIR ]\n");
+	pr_err("                                                          [ prio PRIO ]\n");
+	pr_err("                                                          [ state STATE ] ]\n");
 	pr_err("                               [ phase-adjust ADJUST ]\n");
 	pr_err("                               [ esync-frequency FREQ ]\n");
 	pr_err("                               [ reference-sync PIN_ID [ state STATE ] ]\n");
@@ -1078,6 +1081,7 @@ static int cmd_pin_set(struct dpll *dpll)
 	struct dpll_pin_set_req *req;
 	struct dpll_reference_sync *ref_syncs = NULL;
 	unsigned int n_ref_syncs = 0;
+	struct dpll_pin_parent_device *parent_dev = NULL;
 	__u32 id = 0;
 	bool has_id = false;
 	int ret = 0;
@@ -1186,6 +1190,94 @@ static int cmd_pin_set(struct dpll *dpll)
 			}
 			dpll_pin_set_req_set_phase_adjust(req, phase_adjust);
 			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "parent-device")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("parent-device requires device id\n");
+				ret = -EINVAL;
+				goto out;
+			}
+
+			/* Allocate single parent device element */
+			parent_dev = calloc(1, sizeof(*parent_dev));
+			if (!parent_dev) {
+				ret = -ENOMEM;
+				goto out;
+			}
+
+			/* Parse parent device id */
+			if (get_u32(&parent_dev->parent_id, dpll_argv(dpll), 0)) {
+				pr_err("invalid parent-device id: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			parent_dev->_present.parent_id = 1;
+			dpll_arg_inc(dpll);
+
+			/* Parse optional parent-device attributes */
+			while (dpll_argc(dpll) > 0) {
+				if (dpll_argv_match(dpll, "direction")) {
+					dpll_arg_inc(dpll);
+					if (dpll_argc(dpll) == 0) {
+						pr_err("direction requires an argument\n");
+						ret = -EINVAL;
+						goto out;
+					}
+					if (dpll_argv_match(dpll, "input")) {
+						parent_dev->direction = DPLL_PIN_DIRECTION_INPUT;
+						parent_dev->_present.direction = 1;
+					} else if (dpll_argv_match(dpll, "output")) {
+						parent_dev->direction = DPLL_PIN_DIRECTION_OUTPUT;
+						parent_dev->_present.direction = 1;
+					} else {
+						pr_err("invalid direction: %s (use input/output)\n",
+						       dpll_argv(dpll));
+						ret = -EINVAL;
+						goto out;
+					}
+					dpll_arg_inc(dpll);
+				} else if (dpll_argv_match(dpll, "prio")) {
+					dpll_arg_inc(dpll);
+					if (dpll_argc(dpll) == 0) {
+						pr_err("prio requires an argument\n");
+						ret = -EINVAL;
+						goto out;
+					}
+					if (get_u32(&parent_dev->prio, dpll_argv(dpll), 0)) {
+						pr_err("invalid prio: %s\n", dpll_argv(dpll));
+						ret = -EINVAL;
+						goto out;
+					}
+					parent_dev->_present.prio = 1;
+					dpll_arg_inc(dpll);
+				} else if (dpll_argv_match(dpll, "state")) {
+					dpll_arg_inc(dpll);
+					if (dpll_argc(dpll) == 0) {
+						pr_err("state requires an argument\n");
+						ret = -EINVAL;
+						goto out;
+					}
+					if (dpll_argv_match(dpll, "connected")) {
+						parent_dev->state = DPLL_PIN_STATE_CONNECTED;
+						parent_dev->_present.state = 1;
+					} else if (dpll_argv_match(dpll, "disconnected")) {
+						parent_dev->state = DPLL_PIN_STATE_DISCONNECTED;
+						parent_dev->_present.state = 1;
+					} else if (dpll_argv_match(dpll, "selectable")) {
+						parent_dev->state = DPLL_PIN_STATE_SELECTABLE;
+						parent_dev->_present.state = 1;
+					} else {
+						pr_err("invalid state: %s (use connected/disconnected/selectable)\n",
+						       dpll_argv(dpll));
+						ret = -EINVAL;
+						goto out;
+					}
+					dpll_arg_inc(dpll);
+				} else {
+					/* Not a parent-device attribute, break to parse next top-level option */
+					break;
+				}
+			}
 		} else if (dpll_argv_match(dpll, "esync-frequency")) {
 			__u64 esync_freq;
 			dpll_arg_inc(dpll);
@@ -1276,6 +1368,10 @@ static int cmd_pin_set(struct dpll *dpll)
 	if (n_ref_syncs > 0)
 		__dpll_pin_set_req_set_reference_sync(req, ref_syncs, n_ref_syncs);
 
+	/* Set parent device if specified */
+	if (parent_dev)
+		__dpll_pin_set_req_set_parent_device(req, parent_dev, 1);
+
 	ret = dpll_pin_set(dpll->ys, req);
 	if (ret < 0) {
 		pr_err("Failed to set pin: %s\n", dpll->ys->err.msg);
@@ -1284,6 +1380,7 @@ static int cmd_pin_set(struct dpll *dpll)
 
 out:
 	free(ref_syncs);
+	free(parent_dev);
 	dpll_pin_set_req_free(req);
 	return ret;
 }
