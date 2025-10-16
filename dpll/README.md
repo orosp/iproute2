@@ -89,6 +89,15 @@ Set pin with parent pin:
 dpll pin set id 0 parent-pin 1 state connected
 ```
 
+### Monitor Commands
+
+Monitor DPLL events and notifications:
+```bash
+dpll monitor
+```
+
+The monitor command subscribes to the DPLL multicast group and displays device and pin notifications in real-time. Press Ctrl+C to stop monitoring.
+
 ### JSON Output
 
 All commands support JSON output:

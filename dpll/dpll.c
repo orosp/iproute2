@@ -13,6 +13,8 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <errno.h>
+#include <signal.h>
+#include <poll.h>
 #include <linux/dpll.h>
 
 #include <ynl.h>
@@ -20,6 +22,13 @@
 #include "version.h"
 #include "utils.h"
 #include "json_print.h"
+
+static volatile sig_atomic_t monitor_running = 1;
+
+static void monitor_sig_handler(int signo __attribute__((unused)))
+{
+	monitor_running = 0;
+}
 
 struct dpll {
 	struct ynl_sock *ys;
@@ -153,12 +162,13 @@ static void help(void)
 {
 	pr_err("Usage: dpll [ OPTIONS ] OBJECT { COMMAND | help }\n"
 	       "       dpll [ -j[son] ] [ -p[retty] ]\n"
-	       "where  OBJECT := { device | pin }\n"
+	       "where  OBJECT := { device | pin | monitor }\n"
 	       "       OPTIONS := { -V[ersion] | -j[son] | -p[retty] }\n");
 }
 
 static int cmd_device(struct dpll *dpll);
 static int cmd_pin(struct dpll *dpll);
+static int cmd_monitor(struct dpll *dpll);
 
 static int dpll_cmd(struct dpll *dpll, int argc, char **argv)
 {
@@ -174,6 +184,9 @@ static int dpll_cmd(struct dpll *dpll, int argc, char **argv)
 	} else if (dpll_argv_match(dpll, "pin")) {
 		dpll_arg_inc(dpll);
 		return cmd_pin(dpll);
+	} else if (dpll_argv_match(dpll, "monitor")) {
+		dpll_arg_inc(dpll);
+		return cmd_monitor(dpll);
 	}
 	pr_err("Object \"%s\" not found\n", dpll_argv(dpll));
 	return -ENOENT;
@@ -1572,6 +1585,104 @@ static int cmd_pin_id_get(struct dpll *dpll)
 out:
 	dpll_pin_id_get_req_free(req);
 	return ret;
+}
+
+static int cmd_monitor(struct dpll *dpll)
+{
+	struct ynl_ntf_base_type *ntf;
+	struct pollfd pfd;
+	struct sigaction sa;
+	int ret = 0;
+	int fd;
+
+	/* Subscribe to monitor multicast group */
+	ret = ynl_subscribe(dpll->ys, "monitor");
+	if (ret) {
+		pr_err("Failed to subscribe to monitor group: %s\n", dpll->ys->err.msg);
+		return ret;
+	}
+
+	/* Setup signal handler for graceful exit */
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = monitor_sig_handler;
+	sigaction(SIGINT, &sa, NULL);
+	sigaction(SIGTERM, &sa, NULL);
+
+	/* Get netlink socket fd for polling */
+	fd = ynl_socket_get_fd(dpll->ys);
+	if (fd < 0) {
+		pr_err("Failed to get netlink socket fd\n");
+		return -1;
+	}
+
+	if (dpll->json_output) {
+		open_json_array(PRINT_JSON, "monitor");
+	}
+
+	/* Setup poll structure */
+	memset(&pfd, 0, sizeof(pfd));
+	pfd.fd = fd;
+	pfd.events = POLLIN;
+
+	/* Enter notification loop */
+	while (monitor_running) {
+		ret = poll(&pfd, 1, 1000); /* 1 second timeout */
+		if (ret < 0) {
+			if (errno == EINTR)
+				continue;
+			pr_err("poll() failed: %s\n", strerror(errno));
+			ret = -errno;
+			break;
+		}
+
+		if (ret == 0)
+			continue; /* Timeout, check monitor_running flag */
+
+		/* Data available, check notifications */
+		ret = ynl_ntf_check(dpll->ys);
+		if (ret < 0) {
+			pr_err("Failed to check notifications: %s\n", dpll->ys->err.msg);
+			break;
+		}
+
+		/* Process all queued notifications */
+		while ((ntf = ynl_ntf_dequeue(dpll->ys))) {
+			switch (ntf->cmd) {
+			case DPLL_CMD_DEVICE_CREATE_NTF:
+			case DPLL_CMD_DEVICE_CHANGE_NTF:
+			case DPLL_CMD_DEVICE_DELETE_NTF: {
+				struct dpll_device_get_ntf *dev_ntf;
+				dev_ntf = (struct dpll_device_get_ntf *)ntf;
+				dpll_device_print(&dev_ntf->obj);
+				dpll_device_get_ntf_free(dev_ntf);
+				break;
+			}
+			case DPLL_CMD_PIN_CREATE_NTF:
+			case DPLL_CMD_PIN_CHANGE_NTF:
+			case DPLL_CMD_PIN_DELETE_NTF: {
+				struct dpll_pin_get_ntf *pin_ntf;
+				pin_ntf = (struct dpll_pin_get_ntf *)ntf;
+				dpll_pin_print(&pin_ntf->obj);
+				dpll_pin_get_ntf_free(pin_ntf);
+				break;
+			}
+			default:
+				pr_err("Unknown notification command: %d\n", ntf->cmd);
+				ynl_ntf_free(ntf);
+				break;
+			}
+		}
+	}
+
+	if (dpll->json_output) {
+		close_json_array(PRINT_JSON, NULL);
+	}
+
+	/* Reset signal handlers */
+	signal(SIGINT, SIG_DFL);
+	signal(SIGTERM, SIG_DFL);
+
+	return ret < 0 ? ret : 0;
 }
 
 static int cmd_pin(struct dpll *dpll)
