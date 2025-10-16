@@ -48,6 +48,26 @@ the build environment may not have up to date versions. See Makefile
 if you have special requirements and need to point at different
 kernel include files.
 
+4. YNL library (for dpll tool)
+
+The dpll tool requires the YNL (YAML Netlink) library from the kernel
+source tree. YNL is located at tools/net/ynl/ in the kernel sources.
+
+To build dpll, you need kernel source:
+
+    git clone https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+    cd iproute2
+    ./configure --include_dir=/path/to/kernel/source/include
+    make
+
+If YNL is not found, the dpll tool will be skipped during build.
+This is normal if you don't need dpll functionality.
+
+Note: YNL is not yet packaged by distributions. Future versions may
+support system-installed YNL library via pkg-config.
+
+For detailed documentation, see dpll/README.md.
+
 Stephen Hemminger
 stephen@networkplumber.org
 
