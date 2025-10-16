@@ -34,6 +34,12 @@ Show specific device:
 dpll device show id 0
 ```
 
+Get device ID by attributes:
+```bash
+dpll device id-get module-name ice clock-id 0
+dpll device id-get module-name ice type eec
+```
+
 Set device parameters:
 ```bash
 dpll device set id 0 phase-offset-monitor true
