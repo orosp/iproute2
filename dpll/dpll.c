@@ -1082,8 +1082,10 @@ static int cmd_pin_set(struct dpll *dpll)
 	struct dpll_pin_set_req *req;
 	struct dpll_reference_sync *ref_syncs = NULL;
 	unsigned int n_ref_syncs = 0;
-	struct dpll_pin_parent_device *parent_dev = NULL;
-	struct dpll_pin_parent_pin *parent_pin = NULL;
+	struct dpll_pin_parent_device *parent_devs = NULL;
+	struct dpll_pin_parent_pin *parent_pins = NULL;
+	unsigned int n_parent_devs = 0;
+	unsigned int n_parent_pins = 0;
 	__u32 id = 0;
 	bool has_id = false;
 	int ret = 0;
@@ -1193,6 +1195,7 @@ static int cmd_pin_set(struct dpll *dpll)
 			dpll_pin_set_req_set_phase_adjust(req, phase_adjust);
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "parent-device")) {
+			struct dpll_pin_parent_device *new_parent_devs;
 			dpll_arg_inc(dpll);
 			if (dpll_argc(dpll) == 0) {
 				pr_err("parent-device requires device id\n");
@@ -1200,20 +1203,25 @@ static int cmd_pin_set(struct dpll *dpll)
 				goto out;
 			}
 
-			/* Allocate single parent device element */
-			parent_dev = calloc(1, sizeof(*parent_dev));
-			if (!parent_dev) {
+			/* Reallocate array to add one more element */
+			new_parent_devs = realloc(parent_devs,
+						  (n_parent_devs + 1) * sizeof(*parent_devs));
+			if (!new_parent_devs) {
 				ret = -ENOMEM;
 				goto out;
 			}
+			parent_devs = new_parent_devs;
+
+			/* Initialize new element */
+			memset(&parent_devs[n_parent_devs], 0, sizeof(parent_devs[n_parent_devs]));
 
 			/* Parse parent device id */
-			if (get_u32(&parent_dev->parent_id, dpll_argv(dpll), 0)) {
+			if (get_u32(&parent_devs[n_parent_devs].parent_id, dpll_argv(dpll), 0)) {
 				pr_err("invalid parent-device id: %s\n", dpll_argv(dpll));
 				ret = -EINVAL;
 				goto out;
 			}
-			parent_dev->_present.parent_id = 1;
+			parent_devs[n_parent_devs]._present.parent_id = 1;
 			dpll_arg_inc(dpll);
 
 			/* Parse optional parent-device attributes */
@@ -1226,14 +1234,13 @@ static int cmd_pin_set(struct dpll *dpll)
 						goto out;
 					}
 					if (dpll_argv_match(dpll, "input")) {
-						parent_dev->direction = DPLL_PIN_DIRECTION_INPUT;
-						parent_dev->_present.direction = 1;
+						parent_devs[n_parent_devs].direction = DPLL_PIN_DIRECTION_INPUT;
+						parent_devs[n_parent_devs]._present.direction = 1;
 					} else if (dpll_argv_match(dpll, "output")) {
-						parent_dev->direction = DPLL_PIN_DIRECTION_OUTPUT;
-						parent_dev->_present.direction = 1;
+						parent_devs[n_parent_devs].direction = DPLL_PIN_DIRECTION_OUTPUT;
+						parent_devs[n_parent_devs]._present.direction = 1;
 					} else {
-						pr_err("invalid direction: %s (use input/output)\n",
-						       dpll_argv(dpll));
+						pr_err("invalid direction: %s\n", dpll_argv(dpll));
 						ret = -EINVAL;
 						goto out;
 					}
@@ -1245,12 +1252,12 @@ static int cmd_pin_set(struct dpll *dpll)
 						ret = -EINVAL;
 						goto out;
 					}
-					if (get_u32(&parent_dev->prio, dpll_argv(dpll), 0)) {
+					if (get_u32(&parent_devs[n_parent_devs].prio, dpll_argv(dpll), 0)) {
 						pr_err("invalid prio: %s\n", dpll_argv(dpll));
 						ret = -EINVAL;
 						goto out;
 					}
-					parent_dev->_present.prio = 1;
+					parent_devs[n_parent_devs]._present.prio = 1;
 					dpll_arg_inc(dpll);
 				} else if (dpll_argv_match(dpll, "state")) {
 					dpll_arg_inc(dpll);
@@ -1260,17 +1267,16 @@ static int cmd_pin_set(struct dpll *dpll)
 						goto out;
 					}
 					if (dpll_argv_match(dpll, "connected")) {
-						parent_dev->state = DPLL_PIN_STATE_CONNECTED;
-						parent_dev->_present.state = 1;
+						parent_devs[n_parent_devs].state = DPLL_PIN_STATE_CONNECTED;
+						parent_devs[n_parent_devs]._present.state = 1;
 					} else if (dpll_argv_match(dpll, "disconnected")) {
-						parent_dev->state = DPLL_PIN_STATE_DISCONNECTED;
-						parent_dev->_present.state = 1;
+						parent_devs[n_parent_devs].state = DPLL_PIN_STATE_DISCONNECTED;
+						parent_devs[n_parent_devs]._present.state = 1;
 					} else if (dpll_argv_match(dpll, "selectable")) {
-						parent_dev->state = DPLL_PIN_STATE_SELECTABLE;
-						parent_dev->_present.state = 1;
+						parent_devs[n_parent_devs].state = DPLL_PIN_STATE_SELECTABLE;
+						parent_devs[n_parent_devs]._present.state = 1;
 					} else {
-						pr_err("invalid state: %s (use connected/disconnected/selectable)\n",
-						       dpll_argv(dpll));
+						pr_err("invalid state: %s\n", dpll_argv(dpll));
 						ret = -EINVAL;
 						goto out;
 					}
@@ -1280,7 +1286,11 @@ static int cmd_pin_set(struct dpll *dpll)
 					break;
 				}
 			}
+
+			/* Increment counter */
+			n_parent_devs++;
 		} else if (dpll_argv_match(dpll, "parent-pin")) {
+			struct dpll_pin_parent_pin *new_parent_pins;
 			dpll_arg_inc(dpll);
 			if (dpll_argc(dpll) == 0) {
 				pr_err("parent-pin requires pin id\n");
@@ -1288,20 +1298,25 @@ static int cmd_pin_set(struct dpll *dpll)
 				goto out;
 			}
 
-			/* Allocate single parent pin element */
-			parent_pin = calloc(1, sizeof(*parent_pin));
-			if (!parent_pin) {
+			/* Reallocate array to add one more element */
+			new_parent_pins = realloc(parent_pins,
+						  (n_parent_pins + 1) * sizeof(*parent_pins));
+			if (!new_parent_pins) {
 				ret = -ENOMEM;
 				goto out;
 			}
+			parent_pins = new_parent_pins;
+
+			/* Initialize new element */
+			memset(&parent_pins[n_parent_pins], 0, sizeof(parent_pins[n_parent_pins]));
 
 			/* Parse parent pin id */
-			if (get_u32(&parent_pin->parent_id, dpll_argv(dpll), 0)) {
+			if (get_u32(&parent_pins[n_parent_pins].parent_id, dpll_argv(dpll), 0)) {
 				pr_err("invalid parent-pin id: %s\n", dpll_argv(dpll));
 				ret = -EINVAL;
 				goto out;
 			}
-			parent_pin->_present.parent_id = 1;
+			parent_pins[n_parent_pins]._present.parent_id = 1;
 			dpll_arg_inc(dpll);
 
 			/* Parse optional parent-pin state */
@@ -1313,22 +1328,24 @@ static int cmd_pin_set(struct dpll *dpll)
 					goto out;
 				}
 				if (dpll_argv_match(dpll, "connected")) {
-					parent_pin->state = DPLL_PIN_STATE_CONNECTED;
-					parent_pin->_present.state = 1;
+					parent_pins[n_parent_pins].state = DPLL_PIN_STATE_CONNECTED;
+					parent_pins[n_parent_pins]._present.state = 1;
 				} else if (dpll_argv_match(dpll, "disconnected")) {
-					parent_pin->state = DPLL_PIN_STATE_DISCONNECTED;
-					parent_pin->_present.state = 1;
+					parent_pins[n_parent_pins].state = DPLL_PIN_STATE_DISCONNECTED;
+					parent_pins[n_parent_pins]._present.state = 1;
 				} else if (dpll_argv_match(dpll, "selectable")) {
-					parent_pin->state = DPLL_PIN_STATE_SELECTABLE;
-					parent_pin->_present.state = 1;
+					parent_pins[n_parent_pins].state = DPLL_PIN_STATE_SELECTABLE;
+					parent_pins[n_parent_pins]._present.state = 1;
 				} else {
-					pr_err("invalid state: %s (use connected/disconnected/selectable)\n",
-					       dpll_argv(dpll));
+					pr_err("invalid state: %s\n", dpll_argv(dpll));
 					ret = -EINVAL;
 					goto out;
 				}
 				dpll_arg_inc(dpll);
 			}
+
+			/* Increment counter */
+			n_parent_pins++;
 		} else if (dpll_argv_match(dpll, "esync-frequency")) {
 			__u64 esync_freq;
 			dpll_arg_inc(dpll);
@@ -1419,13 +1436,12 @@ static int cmd_pin_set(struct dpll *dpll)
 	if (n_ref_syncs > 0)
 		__dpll_pin_set_req_set_reference_sync(req, ref_syncs, n_ref_syncs);
 
-	/* Set parent device if specified */
-	if (parent_dev)
-		__dpll_pin_set_req_set_parent_device(req, parent_dev, 1);
+	/* Set parent arrays if any were specified */
+	if (n_parent_devs > 0)
+		__dpll_pin_set_req_set_parent_device(req, parent_devs, n_parent_devs);
 
-	/* Set parent pin if specified */
-	if (parent_pin)
-		__dpll_pin_set_req_set_parent_pin(req, parent_pin, 1);
+	if (n_parent_pins > 0)
+		__dpll_pin_set_req_set_parent_pin(req, parent_pins, n_parent_pins);
 
 	ret = dpll_pin_set(dpll->ys, req);
 	if (ret < 0) {
@@ -1435,8 +1451,8 @@ static int cmd_pin_set(struct dpll *dpll)
 
 out:
 	free(ref_syncs);
-	free(parent_dev);
-	free(parent_pin);
+	free(parent_devs);
+	free(parent_pins);
 	dpll_pin_set_req_free(req);
 	return ret;
 }
