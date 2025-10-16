@@ -718,6 +718,9 @@ static void cmd_pin_help(void)
 	pr_err("                               [ phase-adjust ADJUST ]\n");
 	pr_err("                               [ esync-frequency FREQ ]\n");
 	pr_err("                               [ reference-sync PIN_ID [ state STATE ] ]\n");
+	pr_err("       dpll pin id-get [ module-name NAME ] [ clock-id ID ]\n");
+	pr_err("                        [ board-label LABEL ] [ panel-label LABEL ]\n");
+	pr_err("                        [ package-label LABEL ] [ type TYPE ]\n");
 }
 
 static const char *dpll_pin_type_name(__u32 type)
@@ -1285,6 +1288,123 @@ out:
 	return ret;
 }
 
+static int cmd_pin_id_get(struct dpll *dpll)
+{
+	struct dpll_pin_id_get_req *req;
+	struct dpll_pin_id_get_rsp *rsp;
+	int ret = 0;
+
+	req = dpll_pin_id_get_req_alloc();
+	if (!req)
+		return -ENOMEM;
+
+	/* Parse arguments */
+	while (dpll_argc(dpll) > 0) {
+		if (dpll_argv_match(dpll, "module-name")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("module-name requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_id_get_req_set_module_name(req, dpll_argv(dpll));
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "clock-id")) {
+			__u64 clock_id;
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("clock-id requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (get_u64(&clock_id, dpll_argv(dpll), 0)) {
+				pr_err("invalid clock-id: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_id_get_req_set_clock_id(req, clock_id);
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "board-label")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("board-label requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_id_get_req_set_board_label(req, dpll_argv(dpll));
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "panel-label")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("panel-label requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_id_get_req_set_panel_label(req, dpll_argv(dpll));
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "package-label")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("package-label requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_id_get_req_set_package_label(req, dpll_argv(dpll));
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "type")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("type requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			/* Parse pin type */
+			if (dpll_argv_match(dpll, "mux")) {
+				dpll_pin_id_get_req_set_type(req, DPLL_PIN_TYPE_MUX);
+			} else if (dpll_argv_match(dpll, "ext")) {
+				dpll_pin_id_get_req_set_type(req, DPLL_PIN_TYPE_EXT);
+			} else if (dpll_argv_match(dpll, "synce-eth-port")) {
+				dpll_pin_id_get_req_set_type(req, DPLL_PIN_TYPE_SYNCE_ETH_PORT);
+			} else if (dpll_argv_match(dpll, "int-oscillator")) {
+				dpll_pin_id_get_req_set_type(req, DPLL_PIN_TYPE_INT_OSCILLATOR);
+			} else if (dpll_argv_match(dpll, "gnss")) {
+				dpll_pin_id_get_req_set_type(req, DPLL_PIN_TYPE_GNSS);
+			} else {
+				pr_err("invalid type: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_arg_inc(dpll);
+		} else {
+			pr_err("unknown option: %s\n", dpll_argv(dpll));
+			ret = -EINVAL;
+			goto out;
+		}
+	}
+
+	rsp = dpll_pin_id_get(dpll->ys, req);
+	if (!rsp) {
+		pr_err("Failed to get pin id: %s\n", dpll->ys->err.msg);
+		ret = -1;
+		goto out;
+	}
+
+	/* Print result */
+	if (is_json_context()) {
+		open_json_object(NULL);
+		print_uint(PRINT_JSON, "id", NULL, rsp->id);
+		close_json_object();
+	} else {
+		printf("%u\n", rsp->id);
+	}
+
+	dpll_pin_id_get_rsp_free(rsp);
+
+out:
+	dpll_pin_id_get_req_free(req);
+	return ret;
+}
+
 static int cmd_pin(struct dpll *dpll)
 {
 	if (dpll_argv_match(dpll, "help") || dpll_no_arg(dpll)) {
@@ -1296,6 +1416,9 @@ static int cmd_pin(struct dpll *dpll)
 	} else if (dpll_argv_match(dpll, "set")) {
 		dpll_arg_inc(dpll);
 		return cmd_pin_set(dpll);
+	} else if (dpll_argv_match(dpll, "id-get")) {
+		dpll_arg_inc(dpll);
+		return cmd_pin_id_get(dpll);
 	}
 
 	pr_err("Command \"%s\" not found\n", dpll_argv(dpll) ? dpll_argv(dpll) : "");

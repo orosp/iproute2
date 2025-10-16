@@ -63,6 +63,12 @@ Show specific pin:
 dpll pin show id 0
 ```
 
+Get pin ID by attributes:
+```bash
+dpll pin id-get board-label "SMA1"
+dpll pin id-get module-name ice clock-id 0 type ext
+```
+
 Set pin parameters:
 ```bash
 dpll pin set id 0 frequency 10000000
