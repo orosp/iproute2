@@ -84,6 +84,11 @@ dpll pin set id 0 parent-device 0 direction input prio 10 state connected
 dpll pin set id 0 parent-device 0 direction input prio 10 parent-device 1 direction output prio 5
 ```
 
+Set pin with parent pin:
+```bash
+dpll pin set id 0 parent-pin 1 state connected
+```
+
 ### JSON Output
 
 All commands support JSON output:
