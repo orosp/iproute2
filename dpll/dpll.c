@@ -290,6 +290,8 @@ dpll_free:
 static void cmd_device_help(void)
 {
 	pr_err("Usage: dpll device show [ id DEVICE_ID ]\n");
+	pr_err("       dpll device set id DEVICE_ID [ phase-offset-monitor BOOL ]\n");
+	pr_err("                                      [ phase-offset-avg-factor NUM ]\n");
 }
 
 static const char *dpll_mode_name(__u32 mode)
@@ -512,6 +514,90 @@ static int cmd_device_show(struct dpll *dpll)
 		return cmd_device_show_dump(dpll);
 }
 
+static int cmd_device_set(struct dpll *dpll)
+{
+	struct dpll_device_set_req *req;
+	__u32 id = 0, phase_avg_factor = 0;
+	bool has_id = false;
+	int ret = 0;
+
+	req = dpll_device_set_req_alloc();
+	if (!req)
+		return -ENOMEM;
+
+	/* Parse arguments */
+	while (dpll_argc(dpll) > 0) {
+		if (dpll_argv_match(dpll, "id")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("id requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (get_u32(&id, dpll_argv(dpll), 0)) {
+				pr_err("invalid id: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_device_set_req_set_id(req, id);
+			has_id = true;
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "phase-offset-monitor")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("phase-offset-monitor requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (dpll_argv_match(dpll, "true") || dpll_argv_match(dpll, "1")) {
+				dpll_device_set_req_set_phase_offset_monitor(req, true);
+			} else if (dpll_argv_match(dpll, "false") || dpll_argv_match(dpll, "0")) {
+				dpll_device_set_req_set_phase_offset_monitor(req, false);
+			} else {
+				pr_err("invalid phase-offset-monitor value: %s (use true/false)\n",
+				       dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "phase-offset-avg-factor")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("phase-offset-avg-factor requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (get_u32(&phase_avg_factor, dpll_argv(dpll), 0)) {
+				pr_err("invalid phase-offset-avg-factor: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_device_set_req_set_phase_offset_avg_factor(req, phase_avg_factor);
+			dpll_arg_inc(dpll);
+		} else {
+			pr_err("unknown option: %s\n", dpll_argv(dpll));
+			ret = -EINVAL;
+			goto out;
+		}
+	}
+
+	if (!has_id) {
+		pr_err("device id is required\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ret = dpll_device_set(dpll->ys, req);
+	if (ret < 0) {
+		pr_err("Failed to set device: %s\n", dpll->ys->err.msg);
+		ret = -1;
+	}
+
+out:
+	dpll_device_set_req_free(req);
+	return ret;
+}
+
 static int cmd_device(struct dpll *dpll)
 {
 	if (dpll_argv_match(dpll, "help") || dpll_no_arg(dpll)) {
@@ -520,6 +606,9 @@ static int cmd_device(struct dpll *dpll)
 	} else if (dpll_argv_match(dpll, "show")) {
 		dpll_arg_inc(dpll);
 		return cmd_device_show(dpll);
+	} else if (dpll_argv_match(dpll, "set")) {
+		dpll_arg_inc(dpll);
+		return cmd_device_set(dpll);
 	}
 
 	pr_err("Command \"%s\" not found\n", dpll_argv(dpll) ? dpll_argv(dpll) : "");

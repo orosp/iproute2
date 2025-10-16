@@ -34,6 +34,12 @@ Show specific device:
 dpll device show id 0
 ```
 
+Set device parameters:
+```bash
+dpll device set id 0 phase-offset-monitor true
+dpll device set id 0 phase-offset-avg-factor 10
+```
+
 ### JSON Output
 
 All commands support JSON output:
