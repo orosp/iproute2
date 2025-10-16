@@ -40,6 +40,23 @@ dpll device set id 0 phase-offset-monitor true
 dpll device set id 0 phase-offset-avg-factor 10
 ```
 
+### Pin Commands
+
+Show all pins:
+```bash
+dpll pin show
+```
+
+Show pins for specific device:
+```bash
+dpll pin show device 0
+```
+
+Show specific pin:
+```bash
+dpll pin show id 0
+```
+
 ### JSON Output
 
 All commands support JSON output:
@@ -56,6 +73,7 @@ The tool can be tested even without DPLL hardware by checking help and version:
 dpll -V
 dpll help
 dpll device help
+dpll pin help
 ```
 
 For actual DPLL operations, you need:

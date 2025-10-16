@@ -153,11 +153,12 @@ static void help(void)
 {
 	pr_err("Usage: dpll [ OPTIONS ] OBJECT { COMMAND | help }\n"
 	       "       dpll [ -j[son] ] [ -p[retty] ]\n"
-	       "where  OBJECT := { device }\n"
+	       "where  OBJECT := { device | pin }\n"
 	       "       OPTIONS := { -V[ersion] | -j[son] | -p[retty] }\n");
 }
 
 static int cmd_device(struct dpll *dpll);
+static int cmd_pin(struct dpll *dpll);
 
 static int dpll_cmd(struct dpll *dpll, int argc, char **argv)
 {
@@ -170,6 +171,9 @@ static int dpll_cmd(struct dpll *dpll, int argc, char **argv)
 	} else if (dpll_argv_match(dpll, "device")) {
 		dpll_arg_inc(dpll);
 		return cmd_device(dpll);
+	} else if (dpll_argv_match(dpll, "pin")) {
+		dpll_arg_inc(dpll);
+		return cmd_pin(dpll);
 	}
 	pr_err("Object \"%s\" not found\n", dpll_argv(dpll));
 	return -ENOENT;
@@ -609,6 +613,377 @@ static int cmd_device(struct dpll *dpll)
 	} else if (dpll_argv_match(dpll, "set")) {
 		dpll_arg_inc(dpll);
 		return cmd_device_set(dpll);
+	}
+
+	pr_err("Command \"%s\" not found\n", dpll_argv(dpll) ? dpll_argv(dpll) : "");
+	return -ENOENT;
+}
+
+/* Pin command handlers */
+
+static void cmd_pin_help(void)
+{
+	pr_err("Usage: dpll pin show [ id PIN_ID ] [ device DEVICE_ID ]\n");
+}
+
+static const char *dpll_pin_type_name(__u32 type)
+{
+	switch (type) {
+	case DPLL_PIN_TYPE_MUX:
+		return "mux";
+	case DPLL_PIN_TYPE_EXT:
+		return "ext";
+	case DPLL_PIN_TYPE_SYNCE_ETH_PORT:
+		return "synce-eth-port";
+	case DPLL_PIN_TYPE_INT_OSCILLATOR:
+		return "int-oscillator";
+	case DPLL_PIN_TYPE_GNSS:
+		return "gnss";
+	default:
+		return "unknown";
+	}
+}
+
+static const char *dpll_pin_state_name(__u32 state)
+{
+	switch (state) {
+	case DPLL_PIN_STATE_CONNECTED:
+		return "connected";
+	case DPLL_PIN_STATE_DISCONNECTED:
+		return "disconnected";
+	case DPLL_PIN_STATE_SELECTABLE:
+		return "selectable";
+	default:
+		return "unknown";
+	}
+}
+
+static const char *dpll_pin_direction_name(__u32 direction)
+{
+	switch (direction) {
+	case DPLL_PIN_DIRECTION_INPUT:
+		return "input";
+	case DPLL_PIN_DIRECTION_OUTPUT:
+		return "output";
+	default:
+		return "unknown";
+	}
+}
+
+static void dpll_pin_capabilities_name(__u32 capabilities)
+{
+	if (capabilities & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
+		pr_out(" direction-can-change");
+	if (capabilities & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
+		pr_out(" priority-can-change");
+	if (capabilities & DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)
+		pr_out(" state-can-change");
+}
+
+static void dpll_pin_print(struct dpll_pin_get_rsp *p)
+{
+	unsigned int i;
+
+	open_json_object(NULL);
+
+	print_uint(PRINT_ANY, "id", "pin id %u", p->id);
+	print_string(PRINT_FP, NULL, ":\n", NULL);
+
+	if (p->_len.board_label)
+		print_string(PRINT_ANY, "board_label",
+			     "  board-label: %s\n", p->board_label);
+
+	if (p->_len.panel_label)
+		print_string(PRINT_ANY, "panel_label",
+			     "  panel-label: %s\n", p->panel_label);
+
+	if (p->_len.package_label)
+		print_string(PRINT_ANY, "package_label",
+			     "  package-label: %s\n", p->package_label);
+
+	if (p->_present.type)
+		print_string(PRINT_ANY, "type",
+			     "  type: %s\n", dpll_pin_type_name(p->type));
+
+	if (p->_present.frequency)
+		print_lluint(PRINT_ANY, "frequency",
+			     "  frequency: %llu Hz\n", p->frequency);
+
+	/* Print frequency-supported ranges */
+	if (p->_count.frequency_supported > 0) {
+		pr_out_array_start(NULL, "frequency_supported");
+		for (i = 0; i < p->_count.frequency_supported; i++) {
+			pr_out_entry_start(NULL);
+			if (!is_json_context())
+				pr_out("%sfrequency-supported: ", g_indent_str);
+			if (p->frequency_supported[i]._present.frequency_min)
+				print_lluint(PRINT_ANY, "min", "%llu",
+					     p->frequency_supported[i].frequency_min);
+			if (!is_json_context())
+				pr_out("-");
+			if (p->frequency_supported[i]._present.frequency_max)
+				print_lluint(PRINT_ANY, "max", "%llu",
+					     p->frequency_supported[i].frequency_max);
+			if (!is_json_context())
+				pr_out(" Hz");
+			pr_out_entry_end(NULL);
+		}
+		pr_out_array_end(NULL);
+	}
+
+	/* Print capabilities */
+	if (p->_present.capabilities) {
+		if (is_json_context()) {
+			print_hex(PRINT_JSON, "capabilities", NULL, p->capabilities);
+		} else {
+			pr_out("  capabilities: 0x%x", p->capabilities);
+			dpll_pin_capabilities_name(p->capabilities);
+			pr_out("\n");
+		}
+	}
+
+	/* Print phase adjust range and current value */
+	if (p->_present.phase_adjust_min)
+		print_int(PRINT_ANY, "phase_adjust_min",
+			  "  phase-adjust-min: %d\n", p->phase_adjust_min);
+
+	if (p->_present.phase_adjust_max)
+		print_int(PRINT_ANY, "phase_adjust_max",
+			  "  phase-adjust-max: %d\n", p->phase_adjust_max);
+
+	if (p->_present.phase_adjust)
+		print_int(PRINT_ANY, "phase_adjust",
+			  "  phase-adjust: %d\n", p->phase_adjust);
+
+	/* Print fractional frequency offset */
+	if (p->_present.fractional_frequency_offset)
+		print_lluint(PRINT_ANY, "fractional_frequency_offset",
+			     "  fractional-frequency-offset: %lld ppb\n",
+			     (long long)p->fractional_frequency_offset);
+
+	/* Print esync frequency and related attributes */
+	if (p->_present.esync_frequency)
+		print_lluint(PRINT_ANY, "esync_frequency",
+			     "  esync-frequency: %llu Hz\n", p->esync_frequency);
+
+	if (p->_count.esync_frequency_supported > 0) {
+		pr_out_array_start(NULL, "esync_frequency_supported");
+		for (i = 0; i < p->_count.esync_frequency_supported; i++) {
+			pr_out_entry_start(NULL);
+			if (!is_json_context())
+				pr_out("%sesync-frequency-supported: ", g_indent_str);
+			if (p->esync_frequency_supported[i]._present.frequency_min)
+				print_lluint(PRINT_ANY, "min", "%llu",
+					     p->esync_frequency_supported[i].frequency_min);
+			if (!is_json_context())
+				pr_out("-");
+			if (p->esync_frequency_supported[i]._present.frequency_max)
+				print_lluint(PRINT_ANY, "max", "%llu",
+					     p->esync_frequency_supported[i].frequency_max);
+			if (!is_json_context())
+				pr_out(" Hz");
+			pr_out_entry_end(NULL);
+		}
+		pr_out_array_end(NULL);
+	}
+
+	if (p->_present.esync_pulse)
+		print_uint(PRINT_ANY, "esync_pulse",
+			   "  esync-pulse: %u\n", p->esync_pulse);
+
+	/* Print parent-device relationships */
+	if (p->_count.parent_device > 0) {
+		pr_out_array_start(NULL, "parent_device");
+		for (i = 0; i < p->_count.parent_device; i++) {
+			pr_out_entry_start(NULL);
+			if (!is_json_context())
+				pr_out("%s", g_indent_str);
+			if (p->parent_device[i]._present.parent_id)
+				print_uint(PRINT_ANY, "parent_id",
+					   "id %u", p->parent_device[i].parent_id);
+			if (p->parent_device[i]._present.direction)
+				print_string(PRINT_ANY, "direction",
+					     " direction %s",
+					     dpll_pin_direction_name(p->parent_device[i].direction));
+			if (p->parent_device[i]._present.prio)
+				print_uint(PRINT_ANY, "prio",
+					   " prio %u", p->parent_device[i].prio);
+			if (p->parent_device[i]._present.state)
+				print_string(PRINT_ANY, "state",
+					     " state %s",
+					     dpll_pin_state_name(p->parent_device[i].state));
+			if (p->parent_device[i]._present.phase_offset)
+				print_lluint(PRINT_ANY, "phase_offset",
+					     " phase-offset %lld",
+					     p->parent_device[i].phase_offset);
+			pr_out_entry_end(NULL);
+		}
+		pr_out_array_end(NULL);
+	}
+
+	/* Print parent-pin relationships */
+	if (p->_count.parent_pin > 0) {
+		pr_out_array_start(NULL, "parent_pin");
+		for (i = 0; i < p->_count.parent_pin; i++) {
+			pr_out_entry_start(NULL);
+			if (!is_json_context())
+				pr_out("%s", g_indent_str);
+			if (p->parent_pin[i]._present.parent_id)
+				print_uint(PRINT_ANY, "parent_id",
+					   "id %u", p->parent_pin[i].parent_id);
+			if (p->parent_pin[i]._present.state)
+				print_string(PRINT_ANY, "state",
+					     " state %s",
+					     dpll_pin_state_name(p->parent_pin[i].state));
+			pr_out_entry_end(NULL);
+		}
+		pr_out_array_end(NULL);
+	}
+
+	/* Print reference-sync capable pins */
+	if (p->_count.reference_sync > 0) {
+		pr_out_array_start(NULL, "reference_sync");
+		for (i = 0; i < p->_count.reference_sync; i++) {
+			pr_out_entry_start(NULL);
+			if (!is_json_context())
+				pr_out("%s", g_indent_str);
+			if (p->reference_sync[i]._present.id)
+				print_uint(PRINT_ANY, "id",
+					   "pin %u", p->reference_sync[i].id);
+			if (p->reference_sync[i]._present.state)
+				print_string(PRINT_ANY, "state",
+					     " state %s",
+					     dpll_pin_state_name(p->reference_sync[i].state));
+			pr_out_entry_end(NULL);
+		}
+		pr_out_array_end(NULL);
+	}
+
+	close_json_object();
+}
+
+static int cmd_pin_show_id(struct dpll *dpll, __u32 id)
+{
+	struct dpll_pin_get_req *req;
+	struct dpll_pin_get_rsp *rsp;
+	int ret = 0;
+
+	req = dpll_pin_get_req_alloc();
+	if (!req)
+		return -ENOMEM;
+
+	dpll_pin_get_req_set_id(req, id);
+
+	rsp = dpll_pin_get(dpll->ys, req);
+	if (!rsp) {
+		pr_err("Failed to get pin %u: %s\n", id, dpll->ys->err.msg);
+		ret = -1;
+		goto out_free_req;
+	}
+
+	dpll_pin_print(rsp);
+	dpll_pin_get_rsp_free(rsp);
+
+out_free_req:
+	dpll_pin_get_req_free(req);
+	return ret;
+}
+
+static int cmd_pin_show_dump(struct dpll *dpll, bool has_device_id, __u32 device_id)
+{
+	struct dpll_pin_get_req_dump *req;
+	struct dpll_pin_get_list *pins;
+	struct dpll_pin_get_rsp *p;
+	int ret = 0;
+
+	(void)p; /* used by ynl_dump_foreach macro */
+
+	req = dpll_pin_get_req_dump_alloc();
+	if (!req)
+		return -ENOMEM;
+
+	/* If device_id specified, filter pins by device */
+	if (has_device_id)
+		dpll_pin_get_req_dump_set_id(req, device_id);
+
+	pins = dpll_pin_get_dump(dpll->ys, req);
+	if (!pins) {
+		pr_err("Failed to dump pins: %s\n", dpll->ys->err.msg);
+		ret = -1;
+		goto out_free_req;
+	}
+
+	/* Open JSON array for multiple pins */
+	open_json_array(PRINT_JSON, "pin");
+
+	/* Iterate and print each pin - ynl_dump_foreach handles list traversal safely */
+	ynl_dump_foreach(pins, p) {
+		dpll_pin_print(p);
+	}
+
+	/* Close JSON array */
+	close_json_array(PRINT_JSON, NULL);
+
+	/* Critical: free the list to avoid memory leaks */
+	dpll_pin_get_list_free(pins);
+
+out_free_req:
+	dpll_pin_get_req_dump_free(req);
+	return ret;
+}
+
+static int cmd_pin_show(struct dpll *dpll)
+{
+	__u32 pin_id = 0, device_id = 0;
+	bool has_pin_id = false, has_device_id = false;
+
+	/* Parse arguments */
+	while (dpll_argc(dpll) > 0) {
+		if (dpll_argv_match(dpll, "id")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("id requires an argument\n");
+				return -EINVAL;
+			}
+			if (get_u32(&pin_id, dpll_argv(dpll), 0)) {
+				pr_err("invalid pin id: %s\n", dpll_argv(dpll));
+				return -EINVAL;
+			}
+			has_pin_id = true;
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "device")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("device requires an argument\n");
+				return -EINVAL;
+			}
+			if (get_u32(&device_id, dpll_argv(dpll), 0)) {
+				pr_err("invalid device id: %s\n", dpll_argv(dpll));
+				return -EINVAL;
+			}
+			has_device_id = true;
+			dpll_arg_inc(dpll);
+		} else {
+			pr_err("unknown option: %s\n", dpll_argv(dpll));
+			return -EINVAL;
+		}
+	}
+
+	/* If pin id specified, get that specific pin */
+	if (has_pin_id)
+		return cmd_pin_show_id(dpll, pin_id);
+	else
+		return cmd_pin_show_dump(dpll, has_device_id, device_id);
+}
+
+static int cmd_pin(struct dpll *dpll)
+{
+	if (dpll_argv_match(dpll, "help") || dpll_no_arg(dpll)) {
+		cmd_pin_help();
+		return 0;
+	} else if (dpll_argv_match(dpll, "show")) {
+		dpll_arg_inc(dpll);
+		return cmd_pin_show(dpll);
 	}
 
 	pr_err("Command \"%s\" not found\n", dpll_argv(dpll) ? dpll_argv(dpll) : "");
