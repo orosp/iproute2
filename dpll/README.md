@@ -57,6 +57,15 @@ Show specific pin:
 dpll pin show id 0
 ```
 
+Set pin parameters:
+```bash
+dpll pin set id 0 frequency 10000000
+dpll pin set id 0 prio 10 state connected
+dpll pin set id 0 direction input
+dpll pin set id 0 phase-adjust 100
+dpll pin set id 0 esync-frequency 1000000
+```
+
 ### JSON Output
 
 All commands support JSON output:

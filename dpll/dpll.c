@@ -624,6 +624,13 @@ static int cmd_device(struct dpll *dpll)
 static void cmd_pin_help(void)
 {
 	pr_err("Usage: dpll pin show [ id PIN_ID ] [ device DEVICE_ID ]\n");
+	pr_err("       dpll pin set id PIN_ID [ frequency FREQ ]\n");
+	pr_err("                               [ direction { input | output } ]\n");
+	pr_err("                               [ prio PRIO ]\n");
+	pr_err("                               [ state { connected | disconnected | selectable } ]\n");
+	pr_err("                               [ phase-adjust ADJUST ]\n");
+	pr_err("                               [ esync-frequency FREQ ]\n");
+	pr_err("                               [ reference-sync PIN_ID [ state STATE ] ]\n");
 }
 
 static const char *dpll_pin_type_name(__u32 type)
@@ -976,6 +983,221 @@ static int cmd_pin_show(struct dpll *dpll)
 		return cmd_pin_show_dump(dpll, has_device_id, device_id);
 }
 
+static int cmd_pin_set(struct dpll *dpll)
+{
+	struct dpll_pin_set_req *req;
+	struct dpll_reference_sync *ref_syncs = NULL;
+	unsigned int n_ref_syncs = 0;
+	__u32 id = 0;
+	bool has_id = false;
+	int ret = 0;
+
+	req = dpll_pin_set_req_alloc();
+	if (!req)
+		return -ENOMEM;
+
+	/* Parse arguments */
+	while (dpll_argc(dpll) > 0) {
+		if (dpll_argv_match(dpll, "id")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("id requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (get_u32(&id, dpll_argv(dpll), 0)) {
+				pr_err("invalid pin id: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_set_req_set_id(req, id);
+			has_id = true;
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "frequency")) {
+			__u64 freq;
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("frequency requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (get_u64(&freq, dpll_argv(dpll), 0)) {
+				pr_err("invalid frequency: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_set_req_set_frequency(req, freq);
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "prio")) {
+			__u32 prio;
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("prio requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (get_u32(&prio, dpll_argv(dpll), 0)) {
+				pr_err("invalid prio: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_set_req_set_prio(req, prio);
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "direction")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("direction requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (dpll_argv_match(dpll, "input")) {
+				dpll_pin_set_req_set_direction(req, DPLL_PIN_DIRECTION_INPUT);
+			} else if (dpll_argv_match(dpll, "output")) {
+				dpll_pin_set_req_set_direction(req, DPLL_PIN_DIRECTION_OUTPUT);
+			} else {
+				pr_err("invalid direction: %s (use input/output)\n",
+				       dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "state")) {
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("state requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (dpll_argv_match(dpll, "connected")) {
+				dpll_pin_set_req_set_state(req, DPLL_PIN_STATE_CONNECTED);
+			} else if (dpll_argv_match(dpll, "disconnected")) {
+				dpll_pin_set_req_set_state(req, DPLL_PIN_STATE_DISCONNECTED);
+			} else if (dpll_argv_match(dpll, "selectable")) {
+				dpll_pin_set_req_set_state(req, DPLL_PIN_STATE_SELECTABLE);
+			} else {
+				pr_err("invalid state: %s (use connected/disconnected/selectable)\n",
+				       dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "phase-adjust")) {
+			__s32 phase_adjust;
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("phase-adjust requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (get_s32(&phase_adjust, dpll_argv(dpll), 0)) {
+				pr_err("invalid phase-adjust: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_set_req_set_phase_adjust(req, phase_adjust);
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "esync-frequency")) {
+			__u64 esync_freq;
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("esync-frequency requires an argument\n");
+				ret = -EINVAL;
+				goto out;
+			}
+			if (get_u64(&esync_freq, dpll_argv(dpll), 0)) {
+				pr_err("invalid esync-frequency: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_pin_set_req_set_esync_frequency(req, esync_freq);
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "reference-sync")) {
+			struct dpll_reference_sync *new_ref_syncs;
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("reference-sync requires pin id\n");
+				ret = -EINVAL;
+				goto out;
+			}
+
+			/* Reallocate array to add one more element */
+			new_ref_syncs = realloc(ref_syncs,
+						(n_ref_syncs + 1) * sizeof(*ref_syncs));
+			if (!new_ref_syncs) {
+				ret = -ENOMEM;
+				goto out;
+			}
+			ref_syncs = new_ref_syncs;
+
+			/* Initialize new element */
+			memset(&ref_syncs[n_ref_syncs], 0, sizeof(ref_syncs[n_ref_syncs]));
+
+			/* Parse reference-sync pin id */
+			__u32 ref_pin_id;
+			if (get_u32(&ref_pin_id, dpll_argv(dpll), 0)) {
+				pr_err("invalid reference-sync pin id: %s\n", dpll_argv(dpll));
+				ret = -EINVAL;
+				goto out;
+			}
+			dpll_reference_sync_set_id(&ref_syncs[n_ref_syncs], ref_pin_id);
+			dpll_arg_inc(dpll);
+
+			/* Parse optional reference-sync state */
+			if (dpll_argc(dpll) > 0 && dpll_argv_match(dpll, "state")) {
+				dpll_arg_inc(dpll);
+				if (dpll_argc(dpll) == 0) {
+					pr_err("state requires an argument\n");
+					ret = -EINVAL;
+					goto out;
+				}
+				if (dpll_argv_match(dpll, "connected")) {
+					dpll_reference_sync_set_state(&ref_syncs[n_ref_syncs],
+								      DPLL_PIN_STATE_CONNECTED);
+				} else if (dpll_argv_match(dpll, "disconnected")) {
+					dpll_reference_sync_set_state(&ref_syncs[n_ref_syncs],
+								      DPLL_PIN_STATE_DISCONNECTED);
+				} else if (dpll_argv_match(dpll, "selectable")) {
+					dpll_reference_sync_set_state(&ref_syncs[n_ref_syncs],
+								      DPLL_PIN_STATE_SELECTABLE);
+				} else {
+					pr_err("invalid state: %s\n", dpll_argv(dpll));
+					ret = -EINVAL;
+					goto out;
+				}
+				dpll_arg_inc(dpll);
+			}
+
+			/* Increment counter */
+			n_ref_syncs++;
+		} else {
+			pr_err("unknown option: %s\n", dpll_argv(dpll));
+			ret = -EINVAL;
+			goto out;
+		}
+	}
+
+	if (!has_id) {
+		pr_err("pin id is required\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/* Set reference-sync array if any were specified */
+	if (n_ref_syncs > 0)
+		__dpll_pin_set_req_set_reference_sync(req, ref_syncs, n_ref_syncs);
+
+	ret = dpll_pin_set(dpll->ys, req);
+	if (ret < 0) {
+		pr_err("Failed to set pin: %s\n", dpll->ys->err.msg);
+		ret = -1;
+	}
+
+out:
+	free(ref_syncs);
+	dpll_pin_set_req_free(req);
+	return ret;
+}
+
 static int cmd_pin(struct dpll *dpll)
 {
 	if (dpll_argv_match(dpll, "help") || dpll_no_arg(dpll)) {
@@ -984,6 +1206,9 @@ static int cmd_pin(struct dpll *dpll)
 	} else if (dpll_argv_match(dpll, "show")) {
 		dpll_arg_inc(dpll);
 		return cmd_pin_show(dpll);
+	} else if (dpll_argv_match(dpll, "set")) {
+		dpll_arg_inc(dpll);
+		return cmd_pin_set(dpll);
 	}
 
 	pr_err("Command \"%s\" not found\n", dpll_argv(dpll) ? dpll_argv(dpll) : "");
