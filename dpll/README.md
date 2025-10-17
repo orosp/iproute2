@@ -78,6 +78,11 @@ dpll pin set id 0 phase-adjust 100
 dpll pin set id 0 esync-frequency 1000000
 ```
 
+Set pin reference-sync:
+```bash
+dpll pin set id 0 reference-sync 2 state connected
+```
+
 Set pin with parent devices:
 ```bash
 dpll pin set id 0 parent-device 0 direction input prio 10 state connected
