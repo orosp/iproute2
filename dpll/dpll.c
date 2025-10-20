@@ -864,12 +864,12 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 	if (p->_present.capabilities) {
 		if (is_json_context()) {
 			open_json_array(PRINT_JSON, "capabilities");
-			if (p->capabilities & DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)
-				print_string(PRINT_JSON, NULL, NULL, "state-can-change");
-			if (p->capabilities & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
-				print_string(PRINT_JSON, NULL, NULL, "priority-can-change");
 			if (p->capabilities & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
 				print_string(PRINT_JSON, NULL, NULL, "direction-can-change");
+			if (p->capabilities & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "priority-can-change");
+			if (p->capabilities & DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "state-can-change");
 			close_json_array(PRINT_JSON, NULL);
 		} else {
 			pr_out("  capabilities: 0x%x", p->capabilities);

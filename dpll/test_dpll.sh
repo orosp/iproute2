@@ -248,9 +248,21 @@ compare_json() {
 		return
 	fi
 
+	# Normalize JSON: sort keys and sort arrays in capabilities fields
+	# This makes the comparison order-independent for capability arrays
+	local jq_normalize='
+		walk(
+			if type == "object" then
+				if .capabilities and (.capabilities | type == "array") then
+					.capabilities |= sort
+				else . end
+			else . end
+		)
+	'
+
 	# Normalize and compare JSON
-	local dpll_normalized=$(jq -S . "$dpll_out" 2>/dev/null)
-	local python_normalized=$(jq -S . "$python_out" 2>/dev/null)
+	local dpll_normalized=$(jq -S "$jq_normalize" "$dpll_out" 2>/dev/null)
+	local python_normalized=$(jq -S "$jq_normalize" "$python_out" 2>/dev/null)
 
 	if [ -z "$dpll_normalized" ]; then
 		print_result FAIL "$test_name (invalid dpll JSON)"
