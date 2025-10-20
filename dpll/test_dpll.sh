@@ -90,8 +90,8 @@ fi
 
 # Paths
 DPLL_TOOL="./dpll"
-PYTHON_CLI="../../../linux/tools/net/ynl/cli.py"
-DPLL_SPEC="../../../linux/Documentation/netlink/specs/dpll.yaml"
+PYTHON_CLI="/root/net-next/tools/net/ynl/pyynl/cli.py"
+DPLL_SPEC="/root/net-next/Documentation/netlink/specs/dpll.yaml"
 TEST_DIR="/tmp/dpll_test_$$"
 
 # Test counters
@@ -311,7 +311,7 @@ test_device_operations() {
 			local python_dev_json="$TEST_DIR/python_device_$device_id.json"
 
 			$DPLL_TOOL -j device show id "$device_id" > "$dpll_dev_json" 2>&1 || true
-			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json '{"id": '$device_id'}' > "$python_dev_json" 2>&1 || true
+			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json '{"id": '$device_id'}' --output-json > "$python_dev_json" 2>&1 || true
 
 			if [ -s "$dpll_dev_json" ] && [ -s "$python_dev_json" ]; then
 				compare_json "$dpll_dev_json" "$python_dev_json" "device show id $device_id (vs Python)"
@@ -330,36 +330,79 @@ test_device_operations() {
 test_device_id_get() {
 	print_header "Testing Device ID Get"
 
-	# First get a device to test with
-	local dpll_dump="$TEST_DIR/dpll_device_dump.txt"
-	$DPLL_TOOL device show > "$dpll_dump" 2>&1 || true
+	# Get device data in JSON for easier parsing
+	local dpll_json="$TEST_DIR/dpll_device_dump.json"
+	$DPLL_TOOL -j device show > "$dpll_json" 2>&1 || true
 
-	local device_id=$(grep -oP 'id \K\d+' "$dpll_dump" | head -1)
-	local module_name=$(grep -A5 "id $device_id" "$dpll_dump" | grep -oP 'module-name \K\S+' | head -1)
-	local clock_id=$(grep -A5 "id $device_id" "$dpll_dump" | grep -oP 'clock-id \K\d+' | head -1)
-
-	if [ -n "$module_name" ]; then
-		# Test device-id-get by module-name
-		local found_id=$($DPLL_TOOL device id-get module-name "$module_name" 2>/dev/null | tr -d '\n')
-		if [ "$found_id" == "$device_id" ]; then
-			print_result PASS "dpll device id-get module-name $module_name"
-		else
-			print_result FAIL "dpll device id-get module-name $module_name (expected $device_id, got $found_id)"
-		fi
-	else
-		print_result SKIP "device id-get module-name (no module found)"
+	if ! command -v jq &>/dev/null; then
+		print_result SKIP "device id-get tests (jq not available)"
+		echo ""
+		return
 	fi
 
-	if [ -n "$clock_id" ] && [ -n "$module_name" ]; then
-		# Test device-id-get by clock-id
-		local found_id=$($DPLL_TOOL device id-get module-name "$module_name" clock-id "$clock_id" 2>/dev/null | tr -d '\n')
-		if [ "$found_id" == "$device_id" ]; then
-			print_result PASS "dpll device id-get clock-id $clock_id"
+	# Get first device with module-name
+	local device_data=$(jq -r '.device[0] | {id, module_name: .["module-name"], clock_id: .["clock-id"]} | @json' "$dpll_json" 2>/dev/null)
+
+	if [ -n "$device_data" ]; then
+		local device_id=$(echo "$device_data" | jq -r '.id' 2>/dev/null)
+		local module_name=$(echo "$device_data" | jq -r '.module_name' 2>/dev/null)
+		local clock_id=$(echo "$device_data" | jq -r '.clock_id' 2>/dev/null)
+
+		if [ -n "$module_name" ] && [ "$module_name" != "null" ]; then
+			# Test device-id-get by module-name
+			local found_id=$($DPLL_TOOL device id-get module-name "$module_name" 2>/dev/null | tr -d '\n')
+			if [ "$found_id" == "$device_id" ]; then
+				print_result PASS "dpll device id-get module-name $module_name"
+			else
+				print_result FAIL "dpll device id-get module-name $module_name (expected $device_id, got $found_id)"
+			fi
+
+			# Compare with Python CLI
+			if [ -n "$PYTHON_CLI" ]; then
+				local dpll_result="$TEST_DIR/dpll_device_id_get.json"
+				local python_result="$TEST_DIR/python_device_id_get.json"
+
+				$DPLL_TOOL -j device id-get module-name "$module_name" > "$dpll_result" 2>&1 || true
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'$module_name'"}' --output-json > "$python_result" 2>&1 || true
+
+				if [ -s "$dpll_result" ] && [ -s "$python_result" ]; then
+					compare_json "$dpll_result" "$python_result" "device id-get module-name (vs Python)"
+				else
+					print_result SKIP "device id-get module-name (vs Python)"
+				fi
+			fi
 		else
-			print_result FAIL "dpll device id-get clock-id $clock_id (expected $device_id, got $found_id)"
+			print_result SKIP "device id-get module-name (no module found)"
+		fi
+
+		if [ -n "$clock_id" ] && [ "$clock_id" != "null" ] && [ -n "$module_name" ] && [ "$module_name" != "null" ]; then
+			# Test device-id-get by module-name + clock-id
+			local found_id=$($DPLL_TOOL device id-get module-name "$module_name" clock-id "$clock_id" 2>/dev/null | tr -d '\n')
+			if [ "$found_id" == "$device_id" ]; then
+				print_result PASS "dpll device id-get module-name + clock-id"
+			else
+				print_result FAIL "dpll device id-get module-name + clock-id (expected $device_id, got $found_id)"
+			fi
+
+			# Compare with Python CLI
+			if [ -n "$PYTHON_CLI" ]; then
+				local dpll_result="$TEST_DIR/dpll_device_id_get_clock.json"
+				local python_result="$TEST_DIR/python_device_id_get_clock.json"
+
+				$DPLL_TOOL -j device id-get module-name "$module_name" clock-id "$clock_id" > "$dpll_result" 2>&1 || true
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'$module_name'", "clock-id": '$clock_id'}' --output-json > "$python_result" 2>&1 || true
+
+				if [ -s "$dpll_result" ] && [ -s "$python_result" ]; then
+					compare_json "$dpll_result" "$python_result" "device id-get module-name + clock-id (vs Python)"
+				else
+					print_result SKIP "device id-get module-name + clock-id (vs Python)"
+				fi
+			fi
+		else
+			print_result SKIP "device id-get module-name + clock-id (missing data)"
 		fi
 	else
-		print_result SKIP "device id-get clock-id (no clock-id found)"
+		print_result SKIP "device id-get tests (no devices found)"
 	fi
 
 	echo ""
@@ -408,7 +451,7 @@ test_pin_operations() {
 			local python_pin_json="$TEST_DIR/python_pin_$pin_id.json"
 
 			$DPLL_TOOL -j pin show id "$pin_id" > "$dpll_pin_json" 2>&1 || true
-			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json '{"id": '$pin_id'}' > "$python_pin_json" 2>&1 || true
+			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json '{"id": '$pin_id'}' --output-json > "$python_pin_json" 2>&1 || true
 
 			if [ -s "$dpll_pin_json" ] && [ -s "$python_pin_json" ]; then
 				compare_json "$dpll_pin_json" "$python_pin_json" "pin show id $pin_id (vs Python)"
@@ -439,36 +482,79 @@ test_pin_operations() {
 test_pin_id_get() {
 	print_header "Testing Pin ID Get"
 
-	# First get a pin to test with
-	local dpll_dump="$TEST_DIR/dpll_pin_dump.txt"
-	$DPLL_TOOL pin show > "$dpll_dump" 2>&1 || true
+	# Get pin data in JSON for easier parsing
+	local dpll_json="$TEST_DIR/dpll_pin_dump.json"
+	$DPLL_TOOL -j pin show > "$dpll_json" 2>&1 || true
 
-	local pin_id=$(grep -oP 'id \K\d+' "$dpll_dump" | head -1)
-	local board_label=$(grep -A10 "id $pin_id" "$dpll_dump" | grep -oP 'board-label \K\S+' | head -1)
-	local module_name=$(grep -A10 "id $pin_id" "$dpll_dump" | grep -oP 'module-name \K\S+' | head -1)
-
-	if [ -n "$board_label" ]; then
-		# Test pin-id-get by board-label
-		local found_id=$($DPLL_TOOL pin id-get board-label "$board_label" 2>/dev/null | tr -d '\n')
-		if [ "$found_id" == "$pin_id" ]; then
-			print_result PASS "dpll pin id-get board-label $board_label"
-		else
-			print_result FAIL "dpll pin id-get board-label $board_label (expected $pin_id, got $found_id)"
-		fi
-	else
-		print_result SKIP "pin id-get board-label (no label found)"
+	if ! command -v jq &>/dev/null; then
+		print_result SKIP "pin id-get tests (jq not available)"
+		echo ""
+		return
 	fi
 
-	if [ -n "$module_name" ]; then
-		# Test pin-id-get by module-name
-		local found_id=$($DPLL_TOOL pin id-get module-name "$module_name" 2>/dev/null | head -1 | tr -d '\n')
-		if [ -n "$found_id" ]; then
-			print_result PASS "dpll pin id-get module-name $module_name"
+	# Get first pin with board-label
+	local pin_data=$(jq -r '.pin[] | select(.["board-label"] != null) | {id, board_label: .["board-label"], module_name: .["module-name"]} | @json' "$dpll_json" 2>/dev/null | head -1)
+
+	if [ -n "$pin_data" ]; then
+		local pin_id=$(echo "$pin_data" | jq -r '.id' 2>/dev/null)
+		local board_label=$(echo "$pin_data" | jq -r '.board_label' 2>/dev/null)
+		local module_name=$(echo "$pin_data" | jq -r '.module_name' 2>/dev/null)
+
+		if [ -n "$board_label" ] && [ "$board_label" != "null" ]; then
+			# Test pin-id-get by board-label
+			local found_id=$($DPLL_TOOL pin id-get board-label "$board_label" 2>/dev/null | tr -d '\n')
+			if [ "$found_id" == "$pin_id" ]; then
+				print_result PASS "dpll pin id-get board-label $board_label"
+			else
+				print_result FAIL "dpll pin id-get board-label $board_label (expected $pin_id, got $found_id)"
+			fi
+
+			# Compare with Python CLI
+			if [ -n "$PYTHON_CLI" ]; then
+				local dpll_result="$TEST_DIR/dpll_pin_id_get.json"
+				local python_result="$TEST_DIR/python_pin_id_get.json"
+
+				$DPLL_TOOL -j pin id-get board-label "$board_label" > "$dpll_result" 2>&1 || true
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"board-label": "'$board_label'"}' --output-json > "$python_result" 2>&1 || true
+
+				if [ -s "$dpll_result" ] && [ -s "$python_result" ]; then
+					compare_json "$dpll_result" "$python_result" "pin id-get board-label (vs Python)"
+				else
+					print_result SKIP "pin id-get board-label (vs Python)"
+				fi
+			fi
 		else
-			print_result FAIL "dpll pin id-get module-name $module_name"
+			print_result SKIP "pin id-get board-label (no label found)"
+		fi
+
+		if [ -n "$module_name" ] && [ "$module_name" != "null" ]; then
+			# Test pin-id-get by module-name (may return multiple IDs)
+			local found_ids=$($DPLL_TOOL pin id-get module-name "$module_name" 2>/dev/null | tr '\n' ' ')
+			if echo "$found_ids" | grep -qw "$pin_id"; then
+				print_result PASS "dpll pin id-get module-name $module_name"
+			else
+				print_result FAIL "dpll pin id-get module-name $module_name (expected to include $pin_id)"
+			fi
+
+			# Compare with Python CLI
+			if [ -n "$PYTHON_CLI" ]; then
+				local dpll_result="$TEST_DIR/dpll_pin_id_get_module.json"
+				local python_result="$TEST_DIR/python_pin_id_get_module.json"
+
+				$DPLL_TOOL -j pin id-get module-name "$module_name" > "$dpll_result" 2>&1 || true
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"module-name": "'$module_name'"}' --output-json > "$python_result" 2>&1 || true
+
+				if [ -s "$dpll_result" ] && [ -s "$python_result" ]; then
+					compare_json "$dpll_result" "$python_result" "pin id-get module-name (vs Python)"
+				else
+					print_result SKIP "pin id-get module-name (vs Python)"
+				fi
+			fi
+		else
+			print_result SKIP "pin id-get module-name (no module found)"
 		fi
 	else
-		print_result SKIP "pin id-get module-name (no module found)"
+		print_result SKIP "pin id-get tests (no pins with board-label found)"
 	fi
 
 	echo ""
