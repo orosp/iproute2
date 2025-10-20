@@ -806,6 +806,18 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 	print_uint(PRINT_ANY, "id", "pin id %u", p->id);
 	print_string(PRINT_FP, NULL, ":\n", NULL);
 
+	if (p->_len.module_name)
+		print_string(PRINT_ANY, "module-name",
+			     "  module-name: %s\n", p->module_name);
+
+	if (p->_present.clock_id) {
+		if (is_json_context())
+			print_u64(PRINT_JSON, "clock-id", NULL, p->clock_id);
+		else
+			print_0xhex(PRINT_FP, "clock-id",
+				    "  clock-id: 0x%llx\n", p->clock_id);
+	}
+
 	if (p->_len.board_label)
 		print_string(PRINT_ANY, "board-label",
 			     "  board-label: %s\n", p->board_label);
@@ -852,12 +864,12 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 	if (p->_present.capabilities) {
 		if (is_json_context()) {
 			open_json_array(PRINT_JSON, "capabilities");
-			if (p->capabilities & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
-				print_string(PRINT_JSON, NULL, NULL, "direction-can-change");
-			if (p->capabilities & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
-				print_string(PRINT_JSON, NULL, NULL, "priority-can-change");
 			if (p->capabilities & DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)
 				print_string(PRINT_JSON, NULL, NULL, "state-can-change");
+			if (p->capabilities & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "priority-can-change");
+			if (p->capabilities & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "direction-can-change");
 			close_json_array(PRINT_JSON, NULL);
 		} else {
 			pr_out("  capabilities: 0x%x", p->capabilities);
