@@ -374,43 +374,45 @@ static const char *dpll_lock_status_error_name(__u32 error)
 
 static void dpll_device_print(struct dpll_device_get_rsp *d)
 {
-	open_json_object(NULL);
-
 	print_uint(PRINT_ANY, "id", "device id %u", d->id);
 	print_string(PRINT_FP, NULL, ":\n", NULL);
 
 	if (d->_len.module_name)
-		print_string(PRINT_ANY, "module_name",
+		print_string(PRINT_ANY, "module-name",
 			     "  module-name: %s\n", d->module_name);
 
 	if (d->_present.mode)
 		print_string(PRINT_ANY, "mode",
 			     "  mode: %s\n", dpll_mode_name(d->mode));
 
-	if (d->_present.clock_id)
-		print_0xhex(PRINT_ANY, "clock_id",
-			    "  clock-id: 0x%llx\n", d->clock_id);
+	if (d->_present.clock_id) {
+		if (is_json_context())
+			print_u64(PRINT_JSON, "clock-id", NULL, d->clock_id);
+		else
+			print_0xhex(PRINT_FP, "clock-id",
+				    "  clock-id: 0x%llx\n", d->clock_id);
+	}
 
 	if (d->_present.type)
 		print_string(PRINT_ANY, "type",
 			     "  type: %s\n", dpll_type_name(d->type));
 
 	if (d->_present.lock_status)
-		print_string(PRINT_ANY, "lock_status",
+		print_string(PRINT_ANY, "lock-status",
 			     "  lock-status: %s\n", dpll_lock_status_name(d->lock_status));
 
 	if (d->_present.lock_status_error)
-		print_string(PRINT_ANY, "lock_status_error",
+		print_string(PRINT_ANY, "lock-status-error",
 			     "  lock-status-error: %s\n",
 			     dpll_lock_status_error_name(d->lock_status_error));
 
 	if (d->_present.phase_offset_monitor)
-		print_bool(PRINT_ANY, "phase_offset_monitor",
+		print_bool(PRINT_ANY, "phase-offset-monitor",
 			   "  phase-offset-monitor: %s\n",
 			   d->phase_offset_monitor);
 
 	if (d->_present.phase_offset_avg_factor)
-		print_uint(PRINT_ANY, "phase_offset_avg_factor",
+		print_uint(PRINT_ANY, "phase-offset-avg-factor",
 			   "  phase-offset-avg-factor: %u\n",
 			   d->phase_offset_avg_factor);
 
@@ -429,7 +431,7 @@ static void dpll_device_print(struct dpll_device_get_rsp *d)
 	if (d->_count.mode_supported > 0) {
 		unsigned int i;
 		if (is_json_context()) {
-			open_json_array(PRINT_JSON, "mode_supported");
+			open_json_array(PRINT_JSON, "mode-supported");
 			for (i = 0; i < d->_count.mode_supported; i++) {
 				print_string(PRINT_JSON, NULL, NULL,
 					     dpll_mode_name(d->mode_supported[i]));
@@ -443,8 +445,6 @@ static void dpll_device_print(struct dpll_device_get_rsp *d)
 			pr_out("\n");
 		}
 	}
-
-	close_json_object();
 }
 
 static int cmd_device_show_id(struct dpll *dpll, __u32 id)
@@ -466,10 +466,7 @@ static int cmd_device_show_id(struct dpll *dpll, __u32 id)
 		goto out_free_req;
 	}
 
-	/* For single device, also use "device" array for consistency */
-	open_json_array(PRINT_JSON, "device");
 	dpll_device_print(rsp);
-	close_json_array(PRINT_JSON, NULL);
 
 	dpll_device_get_rsp_free(rsp);
 
@@ -496,7 +493,9 @@ static int cmd_device_show_dump(struct dpll *dpll)
 
 	/* Iterate through all devices - ynl_dump_foreach is a macro that's safe */
 	ynl_dump_foreach(devs, d) {
+		open_json_object(NULL);
 		dpll_device_print(d);
+		close_json_object();
 	}
 
 	/* Close JSON array */
@@ -693,9 +692,7 @@ static int cmd_device_id_get(struct dpll *dpll)
 
 	/* Print result */
 	if (is_json_context()) {
-		open_json_object(NULL);
 		print_uint(PRINT_JSON, "id", NULL, rsp->id);
-		close_json_object();
 	} else {
 		printf("%u\n", rsp->id);
 	}
@@ -806,21 +803,19 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 {
 	unsigned int i;
 
-	open_json_object(NULL);
-
 	print_uint(PRINT_ANY, "id", "pin id %u", p->id);
 	print_string(PRINT_FP, NULL, ":\n", NULL);
 
 	if (p->_len.board_label)
-		print_string(PRINT_ANY, "board_label",
+		print_string(PRINT_ANY, "board-label",
 			     "  board-label: %s\n", p->board_label);
 
 	if (p->_len.panel_label)
-		print_string(PRINT_ANY, "panel_label",
+		print_string(PRINT_ANY, "panel-label",
 			     "  panel-label: %s\n", p->panel_label);
 
 	if (p->_len.package_label)
-		print_string(PRINT_ANY, "package_label",
+		print_string(PRINT_ANY, "package-label",
 			     "  package-label: %s\n", p->package_label);
 
 	if (p->_present.type)
@@ -833,7 +828,7 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 
 	/* Print frequency-supported ranges */
 	if (p->_count.frequency_supported > 0) {
-		pr_out_array_start(NULL, "frequency_supported");
+		pr_out_array_start(NULL, "frequency-supported");
 		for (i = 0; i < p->_count.frequency_supported; i++) {
 			pr_out_entry_start(NULL);
 			if (!is_json_context())
@@ -866,30 +861,30 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 
 	/* Print phase adjust range and current value */
 	if (p->_present.phase_adjust_min)
-		print_int(PRINT_ANY, "phase_adjust_min",
+		print_int(PRINT_ANY, "phase-adjust-min",
 			  "  phase-adjust-min: %d\n", p->phase_adjust_min);
 
 	if (p->_present.phase_adjust_max)
-		print_int(PRINT_ANY, "phase_adjust_max",
+		print_int(PRINT_ANY, "phase-adjust-max",
 			  "  phase-adjust-max: %d\n", p->phase_adjust_max);
 
 	if (p->_present.phase_adjust)
-		print_int(PRINT_ANY, "phase_adjust",
+		print_int(PRINT_ANY, "phase-adjust",
 			  "  phase-adjust: %d\n", p->phase_adjust);
 
 	/* Print fractional frequency offset */
 	if (p->_present.fractional_frequency_offset)
-		print_lluint(PRINT_ANY, "fractional_frequency_offset",
+		print_lluint(PRINT_ANY, "fractional-frequency-offset",
 			     "  fractional-frequency-offset: %lld ppb\n",
 			     (long long)p->fractional_frequency_offset);
 
 	/* Print esync frequency and related attributes */
 	if (p->_present.esync_frequency)
-		print_lluint(PRINT_ANY, "esync_frequency",
+		print_lluint(PRINT_ANY, "esync-frequency",
 			     "  esync-frequency: %llu Hz\n", p->esync_frequency);
 
 	if (p->_count.esync_frequency_supported > 0) {
-		pr_out_array_start(NULL, "esync_frequency_supported");
+		pr_out_array_start(NULL, "esync-frequency-supported");
 		for (i = 0; i < p->_count.esync_frequency_supported; i++) {
 			pr_out_entry_start(NULL);
 			if (!is_json_context())
@@ -910,18 +905,18 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 	}
 
 	if (p->_present.esync_pulse)
-		print_uint(PRINT_ANY, "esync_pulse",
+		print_uint(PRINT_ANY, "esync-pulse",
 			   "  esync-pulse: %u\n", p->esync_pulse);
 
 	/* Print parent-device relationships */
 	if (p->_count.parent_device > 0) {
-		pr_out_array_start(NULL, "parent_device");
+		pr_out_array_start(NULL, "parent-device");
 		for (i = 0; i < p->_count.parent_device; i++) {
 			pr_out_entry_start(NULL);
 			if (!is_json_context())
 				pr_out("%s", g_indent_str);
 			if (p->parent_device[i]._present.parent_id)
-				print_uint(PRINT_ANY, "parent_id",
+				print_uint(PRINT_ANY, "parent-id",
 					   "id %u", p->parent_device[i].parent_id);
 			if (p->parent_device[i]._present.direction)
 				print_string(PRINT_ANY, "direction",
@@ -935,7 +930,7 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 					     " state %s",
 					     dpll_pin_state_name(p->parent_device[i].state));
 			if (p->parent_device[i]._present.phase_offset)
-				print_lluint(PRINT_ANY, "phase_offset",
+				print_lluint(PRINT_ANY, "phase-offset",
 					     " phase-offset %lld",
 					     p->parent_device[i].phase_offset);
 			pr_out_entry_end(NULL);
@@ -945,13 +940,13 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 
 	/* Print parent-pin relationships */
 	if (p->_count.parent_pin > 0) {
-		pr_out_array_start(NULL, "parent_pin");
+		pr_out_array_start(NULL, "parent-pin");
 		for (i = 0; i < p->_count.parent_pin; i++) {
 			pr_out_entry_start(NULL);
 			if (!is_json_context())
 				pr_out("%s", g_indent_str);
 			if (p->parent_pin[i]._present.parent_id)
-				print_uint(PRINT_ANY, "parent_id",
+				print_uint(PRINT_ANY, "parent-id",
 					   "id %u", p->parent_pin[i].parent_id);
 			if (p->parent_pin[i]._present.state)
 				print_string(PRINT_ANY, "state",
@@ -964,7 +959,7 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 
 	/* Print reference-sync capable pins */
 	if (p->_count.reference_sync > 0) {
-		pr_out_array_start(NULL, "reference_sync");
+		pr_out_array_start(NULL, "reference-sync");
 		for (i = 0; i < p->_count.reference_sync; i++) {
 			pr_out_entry_start(NULL);
 			if (!is_json_context())
@@ -980,8 +975,6 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 		}
 		pr_out_array_end(NULL);
 	}
-
-	close_json_object();
 }
 
 static int cmd_pin_show_id(struct dpll *dpll, __u32 id)
@@ -1040,7 +1033,9 @@ static int cmd_pin_show_dump(struct dpll *dpll, bool has_device_id, __u32 device
 
 	/* Iterate and print each pin - ynl_dump_foreach handles list traversal safely */
 	ynl_dump_foreach(pins, p) {
+		open_json_object(NULL);
 		dpll_pin_print(p);
+		close_json_object();
 	}
 
 	/* Close JSON array */
@@ -1581,9 +1576,7 @@ static int cmd_pin_id_get(struct dpll *dpll)
 
 	/* Print result */
 	if (is_json_context()) {
-		open_json_object(NULL);
 		print_uint(PRINT_JSON, "id", NULL, rsp->id);
-		close_json_object();
 	} else {
 		printf("%u\n", rsp->id);
 	}

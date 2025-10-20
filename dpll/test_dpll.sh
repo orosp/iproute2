@@ -252,8 +252,19 @@ compare_json() {
 	local dpll_normalized=$(jq -S . "$dpll_out" 2>/dev/null)
 	local python_normalized=$(jq -S . "$python_out" 2>/dev/null)
 
-	if [ -z "$dpll_normalized" ] || [ -z "$python_normalized" ]; then
-		print_result FAIL "$test_name (invalid JSON)"
+	if [ -z "$dpll_normalized" ]; then
+		print_result FAIL "$test_name (invalid dpll JSON)"
+		echo "  DPLL output file: $dpll_out"
+		echo "  DPLL raw content:"
+		cat "$dpll_out" | head -20
+		return
+	fi
+
+	if [ -z "$python_normalized" ]; then
+		print_result FAIL "$test_name (invalid Python JSON)"
+		echo "  Python output file: $python_out"
+		echo "  Python raw content:"
+		cat "$python_out" | head -20
 		return
 	fi
 
