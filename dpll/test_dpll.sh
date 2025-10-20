@@ -344,10 +344,12 @@ test_device_operations() {
 				print_result PASS "device show id $device_id (vs Python) (both returned error)"
 			elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
 				print_result FAIL "device show id $device_id (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+				echo "  DPLL command: $DPLL_TOOL -j device show id \"$device_id\""
 				echo "  DPLL output file: $dpll_dev_json"
 				echo "  DPLL raw content:"
 				cat "$dpll_dev_json" | head -20
 				echo ""
+				echo "  Python command: python3 $PYTHON_CLI --spec $DPLL_SPEC --do device-get --json '{\"id\": $device_id}' --output-json"
 				echo "  Python output file: $python_dev_json"
 				echo "  Python raw content:"
 				cat "$python_dev_json" | head -20
@@ -433,10 +435,12 @@ test_device_id_get() {
 				elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
 					# Only one returned error - mismatch
 					print_result FAIL "device id-get module-name + clock-id (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+					echo "  DPLL command: $DPLL_TOOL -j device id-get module-name \"$module_name\" clock-id \"$clock_id\""
 					echo "  DPLL output file: $dpll_result"
 					echo "  DPLL raw content:"
 					cat "$dpll_result" | head -20
 					echo ""
+					echo "  Python command: python3 $PYTHON_CLI --spec $DPLL_SPEC --do device-id-get --json '{\"module-name\": \"$module_name\", \"clock-id\": $clock_id}' --output-json"
 					echo "  Python output file: $python_result"
 					echo "  Python raw content:"
 					cat "$python_result" | head -20
@@ -512,10 +516,12 @@ test_pin_operations() {
 				print_result PASS "pin show id $pin_id (vs Python) (both returned error)"
 			elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
 				print_result FAIL "pin show id $pin_id (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+				echo "  DPLL command: $DPLL_TOOL -j pin show id \"$pin_id\""
 				echo "  DPLL output file: $dpll_pin_json"
 				echo "  DPLL raw content:"
 				cat "$dpll_pin_json" | head -20
 				echo ""
+				echo "  Python command: python3 $PYTHON_CLI --spec $DPLL_SPEC --do pin-get --json '{\"id\": $pin_id}' --output-json"
 				echo "  Python output file: $python_pin_json"
 				echo "  Python raw content:"
 				cat "$python_pin_json" | head -20
@@ -593,10 +599,12 @@ test_pin_id_get() {
 					print_result PASS "pin id-get board-label (vs Python) (both returned error)"
 				elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
 					print_result FAIL "pin id-get board-label (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+					echo "  DPLL command: $DPLL_TOOL -j pin id-get board-label \"$board_label\""
 					echo "  DPLL output file: $dpll_result"
 					echo "  DPLL raw content:"
 					cat "$dpll_result" | head -20
 					echo ""
+					echo "  Python command: python3 $PYTHON_CLI --spec $DPLL_SPEC --do pin-id-get --json '{\"board-label\": \"$board_label\"}' --output-json"
 					echo "  Python output file: $python_result"
 					echo "  Python raw content:"
 					cat "$python_result" | head -20
@@ -642,10 +650,12 @@ test_pin_id_get() {
 					print_result PASS "pin id-get module-name (vs Python) (both returned error)"
 				elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
 					print_result FAIL "pin id-get module-name (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+					echo "  DPLL command: $DPLL_TOOL -j pin id-get module-name \"$module_name\""
 					echo "  DPLL output file: $dpll_result"
 					echo "  DPLL raw content:"
 					cat "$dpll_result" | head -20
 					echo ""
+					echo "  Python command: python3 $PYTHON_CLI --spec $DPLL_SPEC --do pin-id-get --json '{\"module-name\": \"$module_name\"}' --output-json"
 					echo "  Python output file: $python_result"
 					echo "  Python raw content:"
 					cat "$python_result" | head -20
