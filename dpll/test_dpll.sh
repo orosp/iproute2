@@ -421,7 +421,7 @@ test_device_id_get() {
 				local python_result="$TEST_DIR/python_device_id_get_clock.json"
 
 				$DPLL_TOOL -j device id-get module-name "$module_name" clock-id "$clock_id" > "$dpll_result" 2>&1 || true
-				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'$module_name'", "clock-id": '$clock_id'}' --output-json > "$python_result" 2>&1 || true
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'", "clock-id": '"$clock_id"'}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
 				local python_error=$(grep -q "Netlink warning:" "$python_result" 2>/dev/null && echo "yes" || echo "no")
@@ -583,7 +583,7 @@ test_pin_id_get() {
 				local python_result="$TEST_DIR/python_pin_id_get.json"
 
 				$DPLL_TOOL -j pin id-get board-label "$board_label" > "$dpll_result" 2>&1 || true
-				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"board-label": "'$board_label'"}' --output-json > "$python_result" 2>&1 || true
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"board-label": "'"$board_label"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
 				local python_error=$(grep -q "Netlink warning:" "$python_result" 2>/dev/null && echo "yes" || echo "no")
@@ -632,7 +632,7 @@ test_pin_id_get() {
 				local python_result="$TEST_DIR/python_pin_id_get_module.json"
 
 				$DPLL_TOOL -j pin id-get module-name "$module_name" > "$dpll_result" 2>&1 || true
-				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"module-name": "'$module_name'"}' --output-json > "$python_result" 2>&1 || true
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
 				local python_error=$(grep -q "Netlink warning:" "$python_result" 2>/dev/null && echo "yes" || echo "no")
