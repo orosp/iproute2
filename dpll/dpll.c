@@ -834,12 +834,12 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 			if (!is_json_context())
 				pr_out("%sfrequency-supported: ", g_indent_str);
 			if (p->frequency_supported[i]._present.frequency_min)
-				print_lluint(PRINT_ANY, "min", "%llu",
+				print_lluint(PRINT_ANY, "frequency-min", "%llu",
 					     p->frequency_supported[i].frequency_min);
 			if (!is_json_context())
 				pr_out("-");
 			if (p->frequency_supported[i]._present.frequency_max)
-				print_lluint(PRINT_ANY, "max", "%llu",
+				print_lluint(PRINT_ANY, "frequency-max", "%llu",
 					     p->frequency_supported[i].frequency_max);
 			if (!is_json_context())
 				pr_out(" Hz");
@@ -851,7 +851,14 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 	/* Print capabilities */
 	if (p->_present.capabilities) {
 		if (is_json_context()) {
-			print_hex(PRINT_JSON, "capabilities", NULL, p->capabilities);
+			open_json_array(PRINT_JSON, "capabilities");
+			if (p->capabilities & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "direction-can-change");
+			if (p->capabilities & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "priority-can-change");
+			if (p->capabilities & DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "state-can-change");
+			close_json_array(PRINT_JSON, NULL);
 		} else {
 			pr_out("  capabilities: 0x%x", p->capabilities);
 			dpll_pin_capabilities_name(p->capabilities);
@@ -890,12 +897,12 @@ static void dpll_pin_print(struct dpll_pin_get_rsp *p)
 			if (!is_json_context())
 				pr_out("%sesync-frequency-supported: ", g_indent_str);
 			if (p->esync_frequency_supported[i]._present.frequency_min)
-				print_lluint(PRINT_ANY, "min", "%llu",
+				print_lluint(PRINT_ANY, "frequency-min", "%llu",
 					     p->esync_frequency_supported[i].frequency_min);
 			if (!is_json_context())
 				pr_out("-");
 			if (p->esync_frequency_supported[i]._present.frequency_max)
-				print_lluint(PRINT_ANY, "max", "%llu",
+				print_lluint(PRINT_ANY, "frequency-max", "%llu",
 					     p->esync_frequency_supported[i].frequency_max);
 			if (!is_json_context())
 				pr_out(" Hz");
