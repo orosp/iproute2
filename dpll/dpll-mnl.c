@@ -215,6 +215,8 @@ int main(int argc, char **argv)
 
 	/* Initialize JSON context */
 	new_json_obj_plain(dpll->json_output);
+	if (dpll->json_output)
+		open_json_object(NULL);
 
 	/* Check if we need netlink (skip for help) */
 	bool need_nl = true;
@@ -242,6 +244,8 @@ int main(int argc, char **argv)
 dpll_fini:
 	if (need_nl)
 		dpll_fini(dpll);
+	if (dpll->json_output)
+		close_json_object();
 	delete_json_obj_plain();
 dpll_free:
 	dpll_free(dpll);
