@@ -753,12 +753,12 @@ static const char *dpll_pin_direction_name(__u32 direction)
 
 static void dpll_pin_capabilities_name(__u32 capabilities)
 {
-	if (capabilities & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
-		pr_out(" direction-can-change");
-	if (capabilities & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
-		pr_out(" priority-can-change");
 	if (capabilities & DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)
 		pr_out(" state-can-change");
+	if (capabilities & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
+		pr_out(" priority-can-change");
+	if (capabilities & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
+		pr_out(" direction-can-change");
 }
 
 /* Pin printing from netlink attributes */
@@ -772,6 +772,21 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		print_uint(PRINT_ANY, "id", "pin id %u",
 			   mnl_attr_get_u32(tb[DPLL_A_PIN_ID]));
 	print_string(PRINT_FP, NULL, ":\n", NULL);
+
+	if (tb[DPLL_A_PIN_MODULE_NAME])
+		print_string(PRINT_ANY, "module-name",
+			     "  module-name: %s\n",
+			     mnl_attr_get_str(tb[DPLL_A_PIN_MODULE_NAME]));
+
+	if (tb[DPLL_A_PIN_CLOCK_ID]) {
+		if (is_json_context())
+			print_u64(PRINT_JSON, "clock-id", NULL,
+				  mnl_attr_get_u64(tb[DPLL_A_PIN_CLOCK_ID]));
+		else
+			print_0xhex(PRINT_FP, "clock-id",
+				    "  clock-id: 0x%llx\n",
+				    mnl_attr_get_u64(tb[DPLL_A_PIN_CLOCK_ID]));
+	}
 
 	if (tb[DPLL_A_PIN_BOARD_LABEL])
 		print_string(PRINT_ANY, "board_label",
@@ -813,12 +828,12 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 				pr_out("    ");
 
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
-				print_lluint(PRINT_ANY, "min", "%llu",
+				print_lluint(PRINT_ANY, "frequency-min", "%llu",
 					     mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MIN]));
 			if (!is_json_context())
 				pr_out("-");
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
-				print_lluint(PRINT_ANY, "max", "%llu",
+				print_lluint(PRINT_ANY, "frequency-max", "%llu",
 					     mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MAX]));
 			if (!is_json_context())
 				pr_out(" Hz\n");
@@ -832,7 +847,14 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	if (tb[DPLL_A_PIN_CAPABILITIES]) {
 		__u32 caps = mnl_attr_get_u32(tb[DPLL_A_PIN_CAPABILITIES]);
 		if (is_json_context()) {
-			print_hex(PRINT_JSON, "capabilities", NULL, caps);
+			open_json_array(PRINT_JSON, "capabilities");
+			if (caps & DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "state-can-change");
+			if (caps & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "priority-can-change");
+			if (caps & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
+				print_string(PRINT_JSON, NULL, NULL, "direction-can-change");
+			close_json_array(PRINT_JSON, NULL);
 		} else {
 			pr_out("  capabilities: 0x%x", caps);
 			dpll_pin_capabilities_name(caps);
@@ -882,12 +904,12 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 				pr_out("    ");
 
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
-				print_lluint(PRINT_ANY, "min", "%llu",
+				print_lluint(PRINT_ANY, "frequency-min", "%llu",
 					     mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MIN]));
 			if (!is_json_context())
 				pr_out("-");
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
-				print_lluint(PRINT_ANY, "max", "%llu",
+				print_lluint(PRINT_ANY, "frequency-max", "%llu",
 					     mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MAX]));
 			if (!is_json_context())
 				pr_out(" Hz\n");
