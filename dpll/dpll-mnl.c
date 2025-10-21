@@ -396,30 +396,16 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 		}
 	}
 
-	/* Handle mode-supported array */
+	/* Handle mode-supported - spec defines as type: u32, multi-attr: true */
 	if (tb[DPLL_A_MODE_SUPPORTED]) {
-		struct nlattr *attr;
+		__u32 mode = mnl_attr_get_u32(tb[DPLL_A_MODE_SUPPORTED]);
 
 		if (is_json_context()) {
 			open_json_array(PRINT_JSON, "mode-supported");
-		} else {
-			pr_out("  mode-supported:");
-		}
-
-		mnl_attr_for_each_nested(attr, tb[DPLL_A_MODE_SUPPORTED]) {
-			__u32 mode = mnl_attr_get_u32(attr);
-			if (is_json_context()) {
-				print_string(PRINT_JSON, NULL, NULL,
-					     dpll_mode_name(mode));
-			} else {
-				pr_out(" %s", dpll_mode_name(mode));
-			}
-		}
-
-		if (is_json_context()) {
+			print_string(PRINT_JSON, NULL, NULL, dpll_mode_name(mode));
 			close_json_array(PRINT_JSON, NULL);
 		} else {
-			pr_out("\n");
+			pr_out("  mode-supported: %s\n", dpll_mode_name(mode));
 		}
 	}
 
