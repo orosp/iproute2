@@ -14,7 +14,7 @@
 # - DPLL hardware available
 # - Python YNL CLI available
 
-set -e
+# Don't use set -e, we want to continue on test failures and show summary
 
 # Parse command line arguments
 # Default: READ-ONLY mode (safe)
@@ -1092,13 +1092,14 @@ test_parent_operations() {
 		local pin_id=$(grep -oP '^pin id \K\d+' "$pin_dump" 2>/dev/null | head -1)
 
 		if [ -n "$device_id" ] && [ -n "$pin_id" ]; then
+			# Test parent-device with state
 			local error_file="$TEST_DIR/parent_device_error.txt"
-			$DPLL_TOOL pin set id "$pin_id" parent-device "$device_id" state connected > /dev/null 2>"$error_file"
+			./dpll pin set id $pin_id parent-device $device_id state connected > /dev/null 2>"$error_file"
 			local exit_code=$?
 			if [ $exit_code -eq 0 ]; then
-				print_result PASS "Pin set with parent-device"
+				print_result PASS "Pin set with parent-device state"
 			elif [ $exit_code -gt 128 ]; then
-				print_result FAIL "Pin set with parent-device (crashed with signal $((exit_code - 128)))"
+				print_result FAIL "Pin set with parent-device state (crashed with signal $((exit_code - 128)))"
 				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id state connected"
 				echo "  Values: pin_id=$pin_id, device_id=$device_id"
 				if [ -s "$error_file" ]; then
@@ -1106,7 +1107,46 @@ test_parent_operations() {
 					cat "$error_file" | head -10 | sed 's/^/    /'
 				fi
 			else
-				print_result SKIP "Pin set with parent-device (not supported)"
+				print_result SKIP "Pin set with parent-device state (not supported)"
+			fi
+
+			# Test parent-device with prio
+			./dpll pin set id $pin_id parent-device $device_id prio 5 > /dev/null 2>"$error_file"
+			exit_code=$?
+			if [ $exit_code -eq 0 ]; then
+				print_result PASS "Pin set with parent-device prio"
+			elif [ $exit_code -gt 128 ]; then
+				print_result FAIL "Pin set with parent-device prio (crashed with signal $((exit_code - 128)))"
+				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id prio 5"
+				echo "  Values: pin_id=$pin_id, device_id=$device_id"
+			else
+				print_result SKIP "Pin set with parent-device prio (not supported)"
+			fi
+
+			# Test parent-device with direction
+			./dpll pin set id $pin_id parent-device $device_id direction input > /dev/null 2>"$error_file"
+			exit_code=$?
+			if [ $exit_code -eq 0 ]; then
+				print_result PASS "Pin set with parent-device direction"
+			elif [ $exit_code -gt 128 ]; then
+				print_result FAIL "Pin set with parent-device direction (crashed with signal $((exit_code - 128)))"
+				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id direction input"
+				echo "  Values: pin_id=$pin_id, device_id=$device_id"
+			else
+				print_result SKIP "Pin set with parent-device direction (not supported)"
+			fi
+
+			# Test parent-device with multiple attributes
+			./dpll pin set id $pin_id parent-device $device_id state connected prio 10 direction input > /dev/null 2>"$error_file"
+			exit_code=$?
+			if [ $exit_code -eq 0 ]; then
+				print_result PASS "Pin set with parent-device multiple attributes"
+			elif [ $exit_code -gt 128 ]; then
+				print_result FAIL "Pin set with parent-device multiple attributes (crashed with signal $((exit_code - 128)))"
+				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id state connected prio 10 direction input"
+				echo "  Values: pin_id=$pin_id, device_id=$device_id"
+			else
+				print_result SKIP "Pin set with parent-device multiple attributes (not supported)"
 			fi
 		else
 			print_result SKIP "Pin set with parent-device (missing device or pin)"
@@ -1144,7 +1184,7 @@ test_reference_sync() {
 
 		if [ -n "$pin_id" ] && [ -n "$ref_pin_id" ]; then
 			local error_file="$TEST_DIR/reference_sync_error.txt"
-			$DPLL_TOOL pin set id "$pin_id" reference-sync "$ref_pin_id" state connected > /dev/null 2>"$error_file"
+			./dpll pin set id $pin_id reference-sync $ref_pin_id state connected > /dev/null 2>"$error_file"
 			local exit_code=$?
 			if [ $exit_code -eq 0 ]; then
 				print_result PASS "Pin set with reference-sync"
