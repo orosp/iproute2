@@ -768,7 +768,7 @@ static void dpll_pin_capabilities_name(__u32 capabilities)
 /* Helper structures for multi-attr collection */
 struct multi_attr_ctx {
 	int count;
-	struct nlattr *entries[32];
+	struct nlattr **entries;  /* dynamically allocated */
 };
 
 /* Pin printing from netlink attributes */
@@ -823,13 +823,17 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print frequency-supported ranges */
 	if (tb[DPLL_A_PIN_FREQUENCY_SUPPORTED]) {
+		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_FREQUENCY_SUPPORTED];
+		int i;
+
 		open_json_array(PRINT_JSON, "frequency-supported");
 		if (!is_json_context())
 			pr_out("  frequency-supported:\n");
 
-		mnl_attr_for_each_nested(attr, tb[DPLL_A_PIN_FREQUENCY_SUPPORTED]) {
+		/* Iterate through all collected frequency-supported entries */
+		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_freq[DPLL_A_PIN_MAX + 1] = {};
-			mnl_attr_parse_nested(attr, attr_pin_cb, tb_freq);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_freq);
 
 			open_json_object(NULL);
 			if (!is_json_context())
@@ -899,13 +903,17 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			     mnl_attr_get_u64(tb[DPLL_A_PIN_ESYNC_FREQUENCY]));
 
 	if (tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED]) {
+		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED];
+		int i;
+
 		open_json_array(PRINT_JSON, "esync-frequency-supported");
 		if (!is_json_context())
 			pr_out("  esync-frequency-supported:\n");
 
-		mnl_attr_for_each_nested(attr, tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED]) {
+		/* Iterate through all collected esync-frequency-supported entries */
+		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_freq[DPLL_A_PIN_MAX + 1] = {};
-			mnl_attr_parse_nested(attr, attr_pin_cb, tb_freq);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_freq);
 
 			open_json_object(NULL);
 			if (!is_json_context())
@@ -1045,6 +1053,61 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	}
 }
 
+/* Count how many times a specific attribute type appears */
+static int count_multi_attr_cb(const struct nlattr *attr, void *data)
+{
+	struct multi_attr_collector {
+		int attr_type;
+		int *count;
+	} *collector = data;
+	int type = mnl_attr_get_type(attr);
+
+	if (type == collector->attr_type)
+		(*collector->count)++;
+	return MNL_CB_OK;
+}
+
+/* Helper to count specific multi-attr type occurrences */
+static unsigned int multi_attr_count_get(const struct nlmsghdr *nlh,
+					  struct genlmsghdr *genl,
+					  int attr_type)
+{
+	struct {
+		int attr_type;
+		int *count;
+	} collector;
+	int count = 0;
+
+	collector.attr_type = attr_type;
+	collector.count = &count;
+	mnl_attr_parse(nlh, sizeof(*genl), count_multi_attr_cb, &collector);
+	return count;
+}
+
+/* Initialize multi-attr context with proper allocation */
+static int multi_attr_ctx_init(struct multi_attr_ctx *ctx, unsigned int count)
+{
+	if (count == 0) {
+		ctx->count = 0;
+		ctx->entries = NULL;
+		return 0;
+	}
+
+	ctx->entries = calloc(count, sizeof(struct nlattr *));
+	if (!ctx->entries)
+		return -ENOMEM;
+	ctx->count = 0;
+	return 0;
+}
+
+/* Free multi-attr context */
+static void multi_attr_ctx_free(struct multi_attr_ctx *ctx)
+{
+	free(ctx->entries);
+	ctx->entries = NULL;
+	ctx->count = 0;
+}
+
 /* Generic helper to collect specific multi-attr type */
 struct multi_attr_collector {
 	int attr_type;
@@ -1056,7 +1119,7 @@ static int collect_multi_attr_cb(const struct nlattr *attr, void *data)
 	struct multi_attr_collector *collector = data;
 	int type = mnl_attr_get_type(attr);
 
-	if (type == collector->attr_type && collector->ctx->count < 32) {
+	if (type == collector->attr_type) {
 		collector->ctx->entries[collector->ctx->count++] = (struct nlattr *)attr;
 	}
 	return MNL_CB_OK;
@@ -1068,34 +1131,90 @@ static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
 	struct multi_attr_ctx parent_dev_ctx = {0}, parent_pin_ctx = {0}, ref_sync_ctx = {0};
+	struct multi_attr_ctx freq_supp_ctx = {0}, esync_freq_supp_ctx = {0};
 	struct multi_attr_collector collector;
+	unsigned int count;
+	int ret = MNL_CB_OK;
 
 	/* First parse to get main attributes */
 	mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
 
-	/* Collect all parent-device multi-attr entries */
-	collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
-	collector.ctx = &parent_dev_ctx;
-	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	/* Pass 1: Count multi-attr occurrences and allocate */
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_DEVICE);
+	if (count > 0 && multi_attr_ctx_init(&parent_dev_ctx, count) < 0)
+		goto err_alloc;
 
-	/* Collect all parent-pin multi-attr entries */
-	collector.attr_type = DPLL_A_PIN_PARENT_PIN;
-	collector.ctx = &parent_pin_ctx;
-	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_PIN);
+	if (count > 0 && multi_attr_ctx_init(&parent_pin_ctx, count) < 0)
+		goto err_alloc;
 
-	/* Collect all reference-sync multi-attr entries */
-	collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
-	collector.ctx = &ref_sync_ctx;
-	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_REFERENCE_SYNC);
+	if (count > 0 && multi_attr_ctx_init(&ref_sync_ctx, count) < 0)
+		goto err_alloc;
+
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_FREQUENCY_SUPPORTED);
+	if (count > 0 && multi_attr_ctx_init(&freq_supp_ctx, count) < 0)
+		goto err_alloc;
+
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
+	if (count > 0 && multi_attr_ctx_init(&esync_freq_supp_ctx, count) < 0)
+		goto err_alloc;
+
+	/* Pass 2: Collect multi-attr entries */
+	if (parent_dev_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
+		collector.ctx = &parent_dev_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
+
+	if (parent_pin_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_PARENT_PIN;
+		collector.ctx = &parent_pin_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
+
+	if (ref_sync_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
+		collector.ctx = &ref_sync_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
+
+	if (freq_supp_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_FREQUENCY_SUPPORTED;
+		collector.ctx = &freq_supp_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
+
+	if (esync_freq_supp_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED;
+		collector.ctx = &esync_freq_supp_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
 
 	/* Replace tb entries with contexts */
 	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ? (struct nlattr *)&parent_dev_ctx : NULL;
 	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ? (struct nlattr *)&parent_pin_ctx : NULL;
 	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ? (struct nlattr *)&ref_sync_ctx : NULL;
+	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ? (struct nlattr *)&freq_supp_ctx : NULL;
+	tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] = esync_freq_supp_ctx.count > 0 ? (struct nlattr *)&esync_freq_supp_ctx : NULL;
 
 	dpll_pin_print_attrs(tb);
 
-	return MNL_CB_OK;
+	goto cleanup;
+
+err_alloc:
+	fprintf(stderr, "Failed to allocate memory for multi-attr collection\n");
+	ret = MNL_CB_ERROR;
+
+cleanup:
+	/* Free allocated memory */
+	multi_attr_ctx_free(&parent_dev_ctx);
+	multi_attr_ctx_free(&parent_pin_ctx);
+	multi_attr_ctx_free(&ref_sync_ctx);
+	multi_attr_ctx_free(&freq_supp_ctx);
+	multi_attr_ctx_free(&esync_freq_supp_ctx);
+
+	return ret;
 }
 
 /* Callback for pin dump (multiple) - wraps each pin in object */
@@ -1104,34 +1223,92 @@ static int cmd_pin_show_dump_cb(const struct nlmsghdr *nlh, void *data)
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
 	struct multi_attr_ctx parent_dev_ctx = {0}, parent_pin_ctx = {0}, ref_sync_ctx = {0};
+	struct multi_attr_ctx freq_supp_ctx = {0}, esync_freq_supp_ctx = {0};
 	struct multi_attr_collector collector;
+	unsigned int count;
+	int ret = MNL_CB_OK;
 
 	/* First parse to get main attributes */
 	mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
 
-	/* Collect all multi-attr entries */
-	collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
-	collector.ctx = &parent_dev_ctx;
-	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	/* Pass 1: Count multi-attr occurrences and allocate */
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_DEVICE);
+	if (count > 0 && multi_attr_ctx_init(&parent_dev_ctx, count) < 0)
+		goto err_alloc;
 
-	collector.attr_type = DPLL_A_PIN_PARENT_PIN;
-	collector.ctx = &parent_pin_ctx;
-	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_PIN);
+	if (count > 0 && multi_attr_ctx_init(&parent_pin_ctx, count) < 0)
+		goto err_alloc;
 
-	collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
-	collector.ctx = &ref_sync_ctx;
-	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_REFERENCE_SYNC);
+	if (count > 0 && multi_attr_ctx_init(&ref_sync_ctx, count) < 0)
+		goto err_alloc;
+
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_FREQUENCY_SUPPORTED);
+	if (count > 0 && multi_attr_ctx_init(&freq_supp_ctx, count) < 0)
+		goto err_alloc;
+
+	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
+	if (count > 0 && multi_attr_ctx_init(&esync_freq_supp_ctx, count) < 0)
+		goto err_alloc;
+
+	/* Pass 2: Collect multi-attr entries */
+	if (parent_dev_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
+		collector.ctx = &parent_dev_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
+
+	if (parent_pin_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_PARENT_PIN;
+		collector.ctx = &parent_pin_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
+
+	if (ref_sync_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
+		collector.ctx = &ref_sync_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
+
+	if (freq_supp_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_FREQUENCY_SUPPORTED;
+		collector.ctx = &freq_supp_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
+
+	if (esync_freq_supp_ctx.entries) {
+		collector.attr_type = DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED;
+		collector.ctx = &esync_freq_supp_ctx;
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+	}
 
 	/* Replace tb entries with contexts */
 	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ? (struct nlattr *)&parent_dev_ctx : NULL;
 	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ? (struct nlattr *)&parent_pin_ctx : NULL;
 	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ? (struct nlattr *)&ref_sync_ctx : NULL;
+	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ? (struct nlattr *)&freq_supp_ctx : NULL;
+	tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] = esync_freq_supp_ctx.count > 0 ? (struct nlattr *)&esync_freq_supp_ctx : NULL;
 
 	open_json_object(NULL);
 	dpll_pin_print_attrs(tb);
 	close_json_object();
 
-	return MNL_CB_OK;
+	goto cleanup;
+
+err_alloc:
+	fprintf(stderr, "Failed to allocate memory for multi-attr collection\n");
+	ret = MNL_CB_ERROR;
+
+cleanup:
+	/* Free allocated memory */
+	multi_attr_ctx_free(&parent_dev_ctx);
+	multi_attr_ctx_free(&parent_pin_ctx);
+	multi_attr_ctx_free(&ref_sync_ctx);
+	multi_attr_ctx_free(&freq_supp_ctx);
+	multi_attr_ctx_free(&esync_freq_supp_ctx);
+
+	return ret;
 }
 
 static int cmd_pin_show_id(struct dpll *dpll, __u32 id)
