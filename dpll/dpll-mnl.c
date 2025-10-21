@@ -791,17 +791,17 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	}
 
 	if (tb[DPLL_A_PIN_BOARD_LABEL])
-		print_string(PRINT_ANY, "board_label",
+		print_string(PRINT_ANY, "board-label",
 			     "  board-label: %s\n",
 			     mnl_attr_get_str(tb[DPLL_A_PIN_BOARD_LABEL]));
 
 	if (tb[DPLL_A_PIN_PANEL_LABEL])
-		print_string(PRINT_ANY, "panel_label",
+		print_string(PRINT_ANY, "panel-label",
 			     "  panel-label: %s\n",
 			     mnl_attr_get_str(tb[DPLL_A_PIN_PANEL_LABEL]));
 
 	if (tb[DPLL_A_PIN_PACKAGE_LABEL])
-		print_string(PRINT_ANY, "package_label",
+		print_string(PRINT_ANY, "package-label",
 			     "  package-label: %s\n",
 			     mnl_attr_get_str(tb[DPLL_A_PIN_PACKAGE_LABEL]));
 
@@ -817,7 +817,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print frequency-supported ranges */
 	if (tb[DPLL_A_PIN_FREQUENCY_SUPPORTED]) {
-		open_json_array(PRINT_JSON, "frequency_supported");
+		open_json_array(PRINT_JSON, "frequency-supported");
 		if (!is_json_context())
 			pr_out("  frequency-supported:\n");
 
@@ -866,17 +866,17 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print phase adjust range and current value */
 	if (tb[DPLL_A_PIN_PHASE_ADJUST_MIN])
-		print_int(PRINT_ANY, "phase_adjust_min",
+		print_int(PRINT_ANY, "phase-adjust-min",
 			  "  phase-adjust-min: %d\n",
 			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST_MIN]));
 
 	if (tb[DPLL_A_PIN_PHASE_ADJUST_MAX])
-		print_int(PRINT_ANY, "phase_adjust_max",
+		print_int(PRINT_ANY, "phase-adjust-max",
 			  "  phase-adjust-max: %d\n",
 			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST_MAX]));
 
 	if (tb[DPLL_A_PIN_PHASE_ADJUST])
-		print_int(PRINT_ANY, "phase_adjust",
+		print_int(PRINT_ANY, "phase-adjust",
 			  "  phase-adjust: %d\n",
 			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST]));
 
@@ -893,7 +893,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			     mnl_attr_get_u64(tb[DPLL_A_PIN_ESYNC_FREQUENCY]));
 
 	if (tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED]) {
-		open_json_array(PRINT_JSON, "esync_frequency_supported");
+		open_json_array(PRINT_JSON, "esync-frequency-supported");
 		if (!is_json_context())
 			pr_out("  esync-frequency-supported:\n");
 
@@ -928,7 +928,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print parent-device relationships */
 	if (tb[DPLL_A_PIN_PARENT_DEVICE]) {
-		open_json_array(PRINT_JSON, "parent_device");
+		open_json_array(PRINT_JSON, "parent-device");
 		if (!is_json_context())
 			pr_out("  parent-device:\n");
 
@@ -941,7 +941,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 				pr_out("    ");
 
 			if (tb_parent[DPLL_A_PIN_PARENT_ID])
-				print_uint(PRINT_ANY, "parent_id",
+				print_uint(PRINT_ANY, "parent-id",
 					   "id %u",
 					   mnl_attr_get_u32(tb_parent[DPLL_A_PIN_PARENT_ID]));
 			if (tb_parent[DPLL_A_PIN_DIRECTION])
@@ -957,7 +957,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 					     " state %s",
 					     dpll_pin_state_name(mnl_attr_get_u32(tb_parent[DPLL_A_PIN_STATE])));
 			if (tb_parent[DPLL_A_PIN_PHASE_OFFSET])
-				print_lluint(PRINT_ANY, "phase_offset",
+				print_lluint(PRINT_ANY, "phase-offset",
 					     " phase-offset %lld",
 					     mnl_attr_get_u64(tb_parent[DPLL_A_PIN_PHASE_OFFSET]));
 
@@ -970,7 +970,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print parent-pin relationships */
 	if (tb[DPLL_A_PIN_PARENT_PIN]) {
-		open_json_array(PRINT_JSON, "parent_pin");
+		open_json_array(PRINT_JSON, "parent-pin");
 		if (!is_json_context())
 			pr_out("  parent-pin:\n");
 
@@ -983,7 +983,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 				pr_out("    ");
 
 			if (tb_parent[DPLL_A_PIN_PARENT_ID])
-				print_uint(PRINT_ANY, "parent_id",
+				print_uint(PRINT_ANY, "parent-id",
 					   "id %u",
 					   mnl_attr_get_u32(tb_parent[DPLL_A_PIN_PARENT_ID]));
 			if (tb_parent[DPLL_A_PIN_STATE])
@@ -1000,7 +1000,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print reference-sync capable pins */
 	if (tb[DPLL_A_PIN_REFERENCE_SYNC]) {
-		open_json_array(PRINT_JSON, "reference_sync");
+		open_json_array(PRINT_JSON, "reference-sync");
 		if (!is_json_context())
 			pr_out("  reference-sync:\n");
 
