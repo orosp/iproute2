@@ -765,10 +765,10 @@ static void dpll_pin_capabilities_name(__u32 capabilities)
 		pr_out(" direction-can-change");
 }
 
-/* Helper structure for multi-attr collection */
-struct parent_device_ctx {
+/* Helper structures for multi-attr collection */
+struct multi_attr_ctx {
 	int count;
-	struct nlattr *entries[32];  /* Max 32 parent devices */
+	struct nlattr *entries[32];
 };
 
 /* Pin printing from netlink attributes */
@@ -934,7 +934,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print parent-device relationships */
 	if (tb[DPLL_A_PIN_PARENT_DEVICE]) {
-		struct parent_device_ctx *ctx = (struct parent_device_ctx *)tb[DPLL_A_PIN_PARENT_DEVICE];
+		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_PARENT_DEVICE];
 		int i;
 
 		open_json_array(PRINT_JSON, "parent-device");
@@ -980,13 +980,16 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print parent-pin relationships */
 	if (tb[DPLL_A_PIN_PARENT_PIN]) {
+		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_PARENT_PIN];
+		int i;
+
 		open_json_array(PRINT_JSON, "parent-pin");
 		if (!is_json_context())
 			pr_out("  parent-pin:\n");
 
-		mnl_attr_for_each_nested(attr, tb[DPLL_A_PIN_PARENT_PIN]) {
+		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_parent[DPLL_A_PIN_MAX + 1] = {};
-			mnl_attr_parse_nested(attr, attr_pin_cb, tb_parent);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_parent);
 
 			open_json_object(NULL);
 			if (!is_json_context())
@@ -1010,13 +1013,16 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print reference-sync capable pins */
 	if (tb[DPLL_A_PIN_REFERENCE_SYNC]) {
+		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_REFERENCE_SYNC];
+		int i;
+
 		open_json_array(PRINT_JSON, "reference-sync");
 		if (!is_json_context())
 			pr_out("  reference-sync:\n");
 
-		mnl_attr_for_each_nested(attr, tb[DPLL_A_PIN_REFERENCE_SYNC]) {
+		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_ref[DPLL_A_PIN_MAX + 1] = {};
-			mnl_attr_parse_nested(attr, attr_pin_cb, tb_ref);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_ref);
 
 			open_json_object(NULL);
 			if (!is_json_context())
@@ -1039,14 +1045,19 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	}
 }
 
-/* Helper callback to collect multi-attr parent-device entries */
-static int collect_parent_device_cb(const struct nlattr *attr, void *data)
+/* Generic helper to collect specific multi-attr type */
+struct multi_attr_collector {
+	int attr_type;
+	struct multi_attr_ctx *ctx;
+};
+
+static int collect_multi_attr_cb(const struct nlattr *attr, void *data)
 {
-	struct parent_device_ctx *ctx = data;
+	struct multi_attr_collector *collector = data;
 	int type = mnl_attr_get_type(attr);
 
-	if (type == DPLL_A_PIN_PARENT_DEVICE && ctx->count < 32) {
-		ctx->entries[ctx->count++] = (struct nlattr *)attr;
+	if (type == collector->attr_type && collector->ctx->count < 32) {
+		collector->ctx->entries[collector->ctx->count++] = (struct nlattr *)attr;
 	}
 	return MNL_CB_OK;
 }
@@ -1056,18 +1067,31 @@ static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
-	struct parent_device_ctx parent_ctx = {0};
+	struct multi_attr_ctx parent_dev_ctx = {0}, parent_pin_ctx = {0}, ref_sync_ctx = {0};
+	struct multi_attr_collector collector;
 
 	/* First parse to get main attributes */
 	mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
 
 	/* Collect all parent-device multi-attr entries */
-	mnl_attr_parse(nlh, sizeof(*genl), collect_parent_device_cb, &parent_ctx);
+	collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
+	collector.ctx = &parent_dev_ctx;
+	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
 
-	/* Temporarily clear tb[PARENT_DEVICE] and pass parent_ctx */
-	tb[DPLL_A_PIN_PARENT_DEVICE] = NULL;
-	if (parent_ctx.count > 0)
-		tb[DPLL_A_PIN_PARENT_DEVICE] = (struct nlattr *)&parent_ctx;
+	/* Collect all parent-pin multi-attr entries */
+	collector.attr_type = DPLL_A_PIN_PARENT_PIN;
+	collector.ctx = &parent_pin_ctx;
+	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+
+	/* Collect all reference-sync multi-attr entries */
+	collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
+	collector.ctx = &ref_sync_ctx;
+	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+
+	/* Replace tb entries with contexts */
+	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ? (struct nlattr *)&parent_dev_ctx : NULL;
+	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ? (struct nlattr *)&parent_pin_ctx : NULL;
+	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ? (struct nlattr *)&ref_sync_ctx : NULL;
 
 	dpll_pin_print_attrs(tb);
 
@@ -1079,8 +1103,29 @@ static int cmd_pin_show_dump_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+	struct multi_attr_ctx parent_dev_ctx = {0}, parent_pin_ctx = {0}, ref_sync_ctx = {0};
+	struct multi_attr_collector collector;
 
+	/* First parse to get main attributes */
 	mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
+
+	/* Collect all multi-attr entries */
+	collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
+	collector.ctx = &parent_dev_ctx;
+	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+
+	collector.attr_type = DPLL_A_PIN_PARENT_PIN;
+	collector.ctx = &parent_pin_ctx;
+	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+
+	collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
+	collector.ctx = &ref_sync_ctx;
+	mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+
+	/* Replace tb entries with contexts */
+	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ? (struct nlattr *)&parent_dev_ctx : NULL;
+	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ? (struct nlattr *)&parent_pin_ctx : NULL;
+	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ? (struct nlattr *)&ref_sync_ctx : NULL;
 
 	open_json_object(NULL);
 	dpll_pin_print_attrs(tb);
