@@ -318,7 +318,7 @@ test_device_operations() {
 	fi
 
 	# Get first device ID from dump
-	local device_id=$(grep -oP 'id \K\d+' "$dpll_dump" | head -1)
+	local device_id=$(grep -oP '^device id \K\d+' "$dpll_dump" | head -1)
 
 	if [ -n "$device_id" ]; then
 		# Test device show by ID
@@ -337,7 +337,7 @@ test_device_operations() {
 			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json '{"id": '$device_id'}' --output-json > "$python_dev_json" 2>&1 || true
 
 			# Check if either tool returned an error
-			local python_error=$(grep -q "Netlink warning:" "$python_dev_json" 2>/dev/null && echo "yes" || echo "no")
+			local python_error=$(grep -qE "Netlink (warning|error):" "$python_dev_json" 2>/dev/null && echo "yes" || echo "no")
 			local dpll_error=$(grep -q "Failed to get\|Failed to dump" "$dpll_dev_json" 2>/dev/null && echo "yes" || echo "no")
 
 			if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
@@ -392,33 +392,85 @@ test_device_id_get() {
 
 		if [ -n "$module_name" ] && [ "$module_name" != "null" ]; then
 			# Test device-id-get by module-name
-			local found_id=$($DPLL_TOOL device id-get module-name "$module_name" 2>/dev/null | tr -d '\n')
-			if [ "$found_id" == "$device_id" ]; then
+			# Note: This may return "multiple matches" error if module has multiple devices
+			local dpll_result_basic="$TEST_DIR/dpll_device_id_get_module_basic.txt"
+			$DPLL_TOOL device id-get module-name "$module_name" > "$dpll_result_basic" 2>&1 || true
+			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
+			local has_error=$(grep -q "Failed to get" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+
+			if [ "$has_error" = "yes" ]; then
+				# Error is expected if there are multiple devices with same module-name
+				print_result PASS "device id-get module-name $module_name (returned error as expected for ambiguous query)"
+			elif [ "$found_id" == "$device_id" ]; then
 				print_result PASS "dpll device id-get module-name $module_name"
 			else
 				print_result FAIL "dpll device id-get module-name $module_name (expected $device_id, got $found_id)"
+				echo "  Command: $DPLL_TOOL device id-get module-name \"$module_name\""
+				echo "  Output file: $dpll_result_basic"
+				echo "  Raw content:"
+				cat "$dpll_result_basic"
 			fi
 
-			# Skip Python CLI comparison for module-name only (may have multiple matches)
-			print_result SKIP "device id-get module-name (vs Python) - multiple matches possible"
+			# Compare with Python CLI
+			if [ -n "$PYTHON_CLI" ]; then
+				local dpll_result="$TEST_DIR/dpll_device_id_get_module.json"
+				local python_result="$TEST_DIR/python_device_id_get_module.json"
+
+				$DPLL_TOOL -j device id-get module-name "$module_name" > "$dpll_result" 2>&1 || true
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
+
+				# Check if either tool returned an error
+				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
+				local dpll_error=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+
+				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+					print_result PASS "device id-get module-name (vs Python) (both returned error)"
+				elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
+					print_result FAIL "device id-get module-name (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+					echo "  DPLL command: $DPLL_TOOL -j device id-get module-name \"$module_name\""
+					echo "  DPLL output file: $dpll_result"
+					echo "  DPLL raw content:"
+					cat "$dpll_result" | head -20
+					echo ""
+					echo "  Python command: python3 $PYTHON_CLI --spec $DPLL_SPEC --do device-id-get --json '{\"module-name\": \"$module_name\"}' --output-json"
+					echo "  Python output file: $python_result"
+					echo "  Python raw content:"
+					cat "$python_result" | head -20
+				elif [ -s "$dpll_result" ] && [ -s "$python_result" ]; then
+					compare_json "$dpll_result" "$python_result" "device id-get module-name (vs Python)"
+				else
+					print_result SKIP "device id-get module-name (vs Python) (empty output)"
+					echo "  DPLL output file: $dpll_result (size: $(stat -c%s "$dpll_result" 2>/dev/null || echo 0))"
+					echo "  Python output file: $python_result (size: $(stat -c%s "$python_result" 2>/dev/null || echo 0))"
+				fi
+			fi
 		else
 			print_result SKIP "device id-get module-name (no module found)"
 		fi
 
 		if [ -n "$clock_id" ] && [ "$clock_id" != "null" ] && [ -n "$module_name" ] && [ "$module_name" != "null" ]; then
 			# Test device-id-get by module-name + clock-id
-			local found_id=$($DPLL_TOOL device id-get module-name "$module_name" clock-id "$clock_id" 2>/dev/null | tr -d '\n')
-			if [ -z "$found_id" ]; then
-				# Empty output means error (likely "multiple matches")
-				print_result SKIP "device id-get module-name + clock-id (multiple matches or error)"
+			# Note: This may return "multiple matches" error if there are multiple devices
+			local dpll_result_basic="$TEST_DIR/dpll_device_id_get_clock_basic.txt"
+			$DPLL_TOOL device id-get module-name "$module_name" clock-id "$clock_id" > "$dpll_result_basic" 2>&1 || true
+			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
+			local has_error=$(grep -q "Failed to get" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+
+			if [ "$has_error" = "yes" ]; then
+				# Error is expected if there are multiple devices
+				print_result PASS "device id-get module-name + clock-id (returned error as expected for ambiguous query)"
 			elif [ "$found_id" == "$device_id" ]; then
 				print_result PASS "dpll device id-get module-name + clock-id"
 			else
 				print_result FAIL "dpll device id-get module-name + clock-id (expected $device_id, got $found_id)"
+				echo "  Command: $DPLL_TOOL device id-get module-name \"$module_name\" clock-id \"$clock_id\""
+				echo "  Output file: $dpll_result_basic"
+				echo "  Raw content:"
+				cat "$dpll_result_basic"
 			fi
 
 			# Compare with Python CLI
-			if [ -n "$PYTHON_CLI" ] && [ -n "$found_id" ]; then
+			if [ -n "$PYTHON_CLI" ]; then
 				local dpll_result="$TEST_DIR/dpll_device_id_get_clock.json"
 				local python_result="$TEST_DIR/python_device_id_get_clock.json"
 
@@ -426,7 +478,7 @@ test_device_id_get() {
 				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'", "clock-id": '"$clock_id"'}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
-				local python_error=$(grep -q "Netlink warning:" "$python_result" 2>/dev/null && echo "yes" || echo "no")
+				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
 				local dpll_error=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
 
 				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
@@ -490,7 +542,7 @@ test_pin_operations() {
 	fi
 
 	# Get first pin ID from dump
-	local pin_id=$(grep -oP 'id \K\d+' "$dpll_dump" | head -1)
+	local pin_id=$(grep -oP '^pin id \K\d+' "$dpll_dump" | head -1)
 
 	if [ -n "$pin_id" ]; then
 		# Test pin show by ID
@@ -509,7 +561,7 @@ test_pin_operations() {
 			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json '{"id": '$pin_id'}' --output-json > "$python_pin_json" 2>&1 || true
 
 			# Check if either tool returned an error
-			local python_error=$(grep -q "Netlink warning:" "$python_pin_json" 2>/dev/null && echo "yes" || echo "no")
+			local python_error=$(grep -qE "Netlink (warning|error):" "$python_pin_json" 2>/dev/null && echo "yes" || echo "no")
 			local dpll_error=$(grep -q "Failed to get\|Failed to dump" "$dpll_pin_json" 2>/dev/null && echo "yes" || echo "no")
 
 			if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
@@ -538,7 +590,7 @@ test_pin_operations() {
 	fi
 
 	# Test pin show with device filter
-	local device_id=$(grep -oP 'id \K\d+' "$TEST_DIR/dpll_device_dump.txt" 2>/dev/null | head -1)
+	local device_id=$(grep -oP '^device id \K\d+' "$TEST_DIR/dpll_device_dump.txt" 2>/dev/null | head -1)
 	if [ -n "$device_id" ]; then
 		if $DPLL_TOOL pin show device "$device_id" > /dev/null 2>&1; then
 			print_result PASS "dpll pin show device $device_id"
@@ -592,7 +644,7 @@ test_pin_id_get() {
 				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"board-label": "'"$board_label"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
-				local python_error=$(grep -q "Netlink warning:" "$python_result" 2>/dev/null && echo "yes" || echo "no")
+				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
 				local dpll_error=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
 
 				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
@@ -622,12 +674,16 @@ test_pin_id_get() {
 
 		if [ -n "$module_name" ] && [ "$module_name" != "null" ]; then
 			# Test pin-id-get by module-name
-			# Note: This will fail with "multiple matches" error if module has multiple pins
+			# Note: This may return "multiple matches" error if module has multiple pins
 			# which is expected kernel behavior (extack error)
-			local found_id=$($DPLL_TOOL pin id-get module-name "$module_name" 2>/dev/null | tr -d '\n')
-			if [ -z "$found_id" ]; then
-				# Empty output means error (likely "multiple matches")
-				print_result SKIP "pin id-get module-name $module_name (multiple matches or error)"
+			local dpll_result_basic="$TEST_DIR/dpll_pin_id_get_module_basic.txt"
+			$DPLL_TOOL pin id-get module-name "$module_name" > "$dpll_result_basic" 2>&1 || true
+			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
+			local has_error=$(grep -q "Failed to get" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+
+			if [ "$has_error" = "yes" ]; then
+				# Error is expected if there are multiple pins with same module-name
+				print_result PASS "pin id-get module-name $module_name (returned error as expected for ambiguous query)"
 			elif [ "$found_id" == "$pin_id" ]; then
 				print_result PASS "dpll pin id-get module-name $module_name"
 			else
@@ -635,7 +691,7 @@ test_pin_id_get() {
 			fi
 
 			# Compare with Python CLI
-			if [ -n "$PYTHON_CLI" ] && [ -n "$found_id" ]; then
+			if [ -n "$PYTHON_CLI" ]; then
 				local dpll_result="$TEST_DIR/dpll_pin_id_get_module.json"
 				local python_result="$TEST_DIR/python_pin_id_get_module.json"
 
@@ -643,7 +699,7 @@ test_pin_id_get() {
 				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
-				local python_error=$(grep -q "Netlink warning:" "$python_result" 2>/dev/null && echo "yes" || echo "no")
+				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
 				local dpll_error=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
 
 				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
@@ -751,13 +807,19 @@ test_json_legacy_consistency() {
 
 	if [ -s "$json_file" ] && [ -s "$legacy_file" ]; then
 		# Extract device IDs from both outputs
-		local json_ids=$(jq -r '.[].id' "$json_file" 2>/dev/null | sort)
-		local legacy_ids=$(grep -oP '^id \K\d+' "$legacy_file" | sort)
+		local json_ids=$(jq -r '.device[]?.id // empty' "$json_file" 2>/dev/null | sort)
+		local legacy_ids=$(grep -oP '^device id \K\d+' "$legacy_file" | sort)
 
 		if [ "$json_ids" == "$legacy_ids" ] && [ -n "$json_ids" ]; then
 			print_result PASS "Device IDs match between JSON and legacy output"
 		elif [ -z "$json_ids" ] && [ -z "$legacy_ids" ]; then
 			print_result SKIP "No devices to compare"
+			echo "  JSON file: $json_file"
+			echo "  Legacy file: $legacy_file"
+			echo "  JSON content sample:"
+			head -5 "$json_file"
+			echo "  Legacy content sample:"
+			head -5 "$legacy_file"
 		else
 			print_result FAIL "Device IDs differ between JSON and legacy output"
 			echo "  JSON IDs: $json_ids"
@@ -765,15 +827,19 @@ test_json_legacy_consistency() {
 		fi
 
 		# Check if module-names match
-		local json_modules=$(jq -r '.[]["module-name"] // empty' "$json_file" 2>/dev/null | sort)
-		local legacy_modules=$(grep -oP 'module-name \K\S+' "$legacy_file" | sort)
+		local json_modules=$(jq -r '.device[]? | .["module-name"] // empty' "$json_file" 2>/dev/null | sort)
+		local legacy_modules=$(grep -oP 'module-name: \K\S+' "$legacy_file" | sort)
 
 		if [ "$json_modules" == "$legacy_modules" ] && [ -n "$json_modules" ]; then
 			print_result PASS "Module names match between JSON and legacy output"
 		elif [ -z "$json_modules" ] && [ -z "$legacy_modules" ]; then
 			print_result SKIP "No module names to compare"
+			echo "  JSON modules extracted: '$json_modules'"
+			echo "  Legacy modules extracted: '$legacy_modules'"
 		else
 			print_result FAIL "Module names differ between JSON and legacy output"
+			echo "  JSON modules: $json_modules"
+			echo "  Legacy modules: $legacy_modules"
 		fi
 	else
 		print_result SKIP "JSON vs Legacy consistency (missing output)"
@@ -787,15 +853,23 @@ test_json_legacy_consistency() {
 	$DPLL_TOOL pin show > "$pin_legacy_file" 2>&1 || true
 
 	if [ -s "$pin_json_file" ] && [ -s "$pin_legacy_file" ]; then
-		local json_pin_ids=$(jq -r '.[].id' "$pin_json_file" 2>/dev/null | sort)
-		local legacy_pin_ids=$(grep -oP '^id \K\d+' "$pin_legacy_file" | sort)
+		local json_pin_ids=$(jq -r '.pin[]?.id // empty' "$pin_json_file" 2>/dev/null | sort)
+		local legacy_pin_ids=$(grep -oP '^pin id \K\d+' "$pin_legacy_file" | sort)
 
 		if [ "$json_pin_ids" == "$legacy_pin_ids" ] && [ -n "$json_pin_ids" ]; then
 			print_result PASS "Pin IDs match between JSON and legacy output"
 		elif [ -z "$json_pin_ids" ] && [ -z "$legacy_pin_ids" ]; then
 			print_result SKIP "No pins to compare"
+			echo "  JSON file: $pin_json_file"
+			echo "  Legacy file: $pin_legacy_file"
+			echo "  JSON content sample:"
+			head -5 "$pin_json_file"
+			echo "  Legacy content sample:"
+			head -5 "$pin_legacy_file"
 		else
 			print_result FAIL "Pin IDs differ between JSON and legacy output"
+			echo "  JSON pin IDs: $json_pin_ids"
+			echo "  Legacy pin IDs: $legacy_pin_ids"
 		fi
 	else
 		print_result SKIP "Pin JSON vs Legacy consistency (missing output)"
@@ -808,7 +882,7 @@ test_json_legacy_consistency() {
 test_device_by_id_formats() {
 	print_header "Testing Device By ID (Both Formats)"
 
-	local device_id=$(grep -oP 'id \K\d+' "$TEST_DIR/device_legacy.txt" 2>/dev/null | head -1)
+	local device_id=$(grep -oP '^device id \K\d+' "$TEST_DIR/device_legacy.txt" 2>/dev/null | head -1)
 
 	if [ -n "$device_id" ]; then
 		# Test legacy format
@@ -860,7 +934,7 @@ test_device_by_id_formats() {
 test_pin_by_id_formats() {
 	print_header "Testing Pin By ID (Both Formats)"
 
-	local pin_id=$(grep -oP 'id \K\d+' "$TEST_DIR/pin_legacy.txt" 2>/dev/null | head -1)
+	local pin_id=$(grep -oP '^pin id \K\d+' "$TEST_DIR/pin_legacy.txt" 2>/dev/null | head -1)
 
 	if [ -n "$pin_id" ]; then
 		# Test legacy format
@@ -917,7 +991,7 @@ test_device_set() {
 		return
 	fi
 
-	local device_id=$(grep -oP 'id \K\d+' "$TEST_DIR/device_legacy.txt" 2>/dev/null | head -1)
+	local device_id=$(grep -oP '^device id \K\d+' "$TEST_DIR/dpll_device_dump.txt" 2>/dev/null | head -1)
 
 	if [ -n "$device_id" ]; then
 		# Test device set with phase-offset-monitor (read current value first)
@@ -950,7 +1024,7 @@ test_pin_set() {
 		return
 	fi
 
-	local pin_id=$(grep -oP 'id \K\d+' "$TEST_DIR/pin_legacy.txt" 2>/dev/null | head -1)
+	local pin_id=$(grep -oP '^pin id \K\d+' "$TEST_DIR/dpll_pin_dump.txt" 2>/dev/null | head -1)
 
 	if [ -n "$pin_id" ]; then
 		# Test pin set with various attributes
@@ -984,7 +1058,7 @@ test_pin_set() {
 test_parent_operations() {
 	print_header "Testing Parent Device/Pin Operations"
 
-	local pin_dump="$TEST_DIR/pin_legacy.txt"
+	local pin_dump="$TEST_DIR/dpll_pin_dump.txt"
 
 	# Check if any pin has parent-device in output
 	if grep -q "parent-device" "$pin_dump" 2>/dev/null; then
@@ -1014,12 +1088,23 @@ test_parent_operations() {
 
 	# Test pin set with parent-device (if we have devices and pins)
 	if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
-		local device_id=$(grep -oP 'id \K\d+' "$TEST_DIR/device_legacy.txt" 2>/dev/null | head -1)
-		local pin_id=$(grep -oP 'id \K\d+' "$pin_dump" 2>/dev/null | head -1)
+		local device_id=$(grep -oP '^device id \K\d+' "$TEST_DIR/dpll_device_dump.txt" 2>/dev/null | head -1)
+		local pin_id=$(grep -oP '^pin id \K\d+' "$pin_dump" 2>/dev/null | head -1)
 
 		if [ -n "$device_id" ] && [ -n "$pin_id" ]; then
-			if $DPLL_TOOL pin set id "$pin_id" parent-device "$device_id" state connected 2>/dev/null; then
+			local error_file="$TEST_DIR/parent_device_error.txt"
+			$DPLL_TOOL pin set id "$pin_id" parent-device "$device_id" state connected > /dev/null 2>"$error_file"
+			local exit_code=$?
+			if [ $exit_code -eq 0 ]; then
 				print_result PASS "Pin set with parent-device"
+			elif [ $exit_code -gt 128 ]; then
+				print_result FAIL "Pin set with parent-device (crashed with signal $((exit_code - 128)))"
+				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id state connected"
+				echo "  Values: pin_id=$pin_id, device_id=$device_id"
+				if [ -s "$error_file" ]; then
+					echo "  Error output:"
+					cat "$error_file" | head -10 | sed 's/^/    /'
+				fi
 			else
 				print_result SKIP "Pin set with parent-device (not supported)"
 			fi
@@ -1054,12 +1139,23 @@ test_reference_sync() {
 
 	# Test pin set with reference-sync
 	if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
-		local pin_id=$(grep -oP 'id \K\d+' "$pin_dump" 2>/dev/null | head -1)
-		local ref_pin_id=$(grep -oP 'id \K\d+' "$pin_dump" 2>/dev/null | sed -n '2p')
+		local pin_id=$(grep -oP '^pin id \K\d+' "$pin_dump" 2>/dev/null | head -1)
+		local ref_pin_id=$(grep -oP '^pin id \K\d+' "$pin_dump" 2>/dev/null | sed -n '2p')
 
 		if [ -n "$pin_id" ] && [ -n "$ref_pin_id" ]; then
-			if $DPLL_TOOL pin set id "$pin_id" reference-sync "$ref_pin_id" state connected 2>/dev/null; then
+			local error_file="$TEST_DIR/reference_sync_error.txt"
+			$DPLL_TOOL pin set id "$pin_id" reference-sync "$ref_pin_id" state connected > /dev/null 2>"$error_file"
+			local exit_code=$?
+			if [ $exit_code -eq 0 ]; then
 				print_result PASS "Pin set with reference-sync"
+			elif [ $exit_code -gt 128 ]; then
+				print_result FAIL "Pin set with reference-sync (crashed with signal $((exit_code - 128)))"
+				echo "  Command: $DPLL_TOOL pin set id $pin_id reference-sync $ref_pin_id state connected"
+				echo "  Values: pin_id=$pin_id, ref_pin_id=$ref_pin_id"
+				if [ -s "$error_file" ]; then
+					echo "  Error output:"
+					cat "$error_file" | head -10 | sed 's/^/    /'
+				fi
 			else
 				print_result SKIP "Pin set with reference-sync (not supported)"
 			fi
