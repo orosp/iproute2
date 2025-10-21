@@ -407,14 +407,12 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 		}
 
 		mnl_attr_for_each_nested(attr, tb[DPLL_A_MODE_SUPPORTED]) {
-			if (mnl_attr_get_type(attr) == DPLL_A_MODE_SUPPORTED) {
-				__u32 mode = mnl_attr_get_u32(attr);
-				if (is_json_context()) {
-					print_string(PRINT_JSON, NULL, NULL,
-						     dpll_mode_name(mode));
-				} else {
-					pr_out(" %s", dpll_mode_name(mode));
-				}
+			__u32 mode = mnl_attr_get_u32(attr);
+			if (is_json_context()) {
+				print_string(PRINT_JSON, NULL, NULL,
+					     dpll_mode_name(mode));
+			} else {
+				pr_out(" %s", dpll_mode_name(mode));
 			}
 		}
 
