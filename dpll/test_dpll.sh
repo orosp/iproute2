@@ -189,6 +189,10 @@ check_dmesg_errors() {
 			echo -e "    ${DIM}${line#> }${NC}"
 		done
 		DMESG_ERRORS=$((DMESG_ERRORS + 1))
+
+		# Update baseline to current state so subsequent tests don't report the same errors
+		cp "$dmesg_current" "$DMESG_BASELINE"
+
 		return 1
 	fi
 
