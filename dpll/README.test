@@ -1,0 +1,146 @@
+# DPLL Test Suite
+
+Comprehensive test suite for the dpll tool.
+
+## Overview
+
+The test suite verifies:
+- All dpll commands (device/pin show, set, id-get)
+- Monitor mode
+- JSON and plain text output
+- Output consistency with Python YNL CLI
+- Error handling
+- Advanced features (parent-device, parent-pin, reference-sync)
+
+## Requirements
+
+- dpll tool built and executable
+- DPLL kernel module loaded
+- Optional: Python YNL CLI for comparison testing
+  - Located at: `tools/net/ynl/cli.py` in kernel source
+  - DPLL spec at: `Documentation/netlink/specs/dpll.yaml`
+- Optional: `jq` for JSON comparison
+
+## Usage
+
+### Basic Usage (Read-Only Mode - Default)
+
+By default, tests run in **read-only mode** (safe for production):
+```bash
+cd dpll
+./test_dpll.sh
+```
+
+This is the **recommended** way to run tests as it:
+- Does NOT modify DPLL configuration
+- Safe for production systems
+- Tests all read operations (show, id-get, monitor)
+- Verifies tool functionality without side effects
+
+### Enable SET Operations
+
+To test SET operations (modifies DPLL configuration):
+```bash
+./test_dpll.sh --enable-set
+```
+
+**Warning**: This mode will modify DPLL configuration. Use only on:
+- Test systems
+- Development environments
+- When you have permission to change DPLL state
+
+### Help
+
+Show usage information:
+```bash
+./test_dpll.sh --help
+```
+
+## Test Coverage
+
+### Read Operations (always tested)
+- `dpll help`, `dpll device help`, `dpll pin help`
+- `dpll -V`
+- `dpll device show` (dump and by ID)
+- `dpll device id-get`
+- `dpll pin show` (dump, by ID, by device)
+- `dpll pin id-get`
+- `dpll monitor` (start/stop verification)
+- JSON output validation
+- Error handling
+
+### Write Operations (skipped by default, enabled with --enable-set)
+- `dpll device set` (phase-offset-monitor, phase-offset-avg-factor)
+- `dpll pin set` (prio, state, direction)
+- `dpll pin set` with parent-device
+- `dpll pin set` with parent-pin (via reference-sync)
+
+### Output Validation
+- JSON validity
+- JSON vs Python YNL CLI comparison (when available)
+- JSON vs plain text consistency
+- Pretty-printed JSON formatting
+
+## Test Results
+
+The test suite reports:
+- **PASS**: Test succeeded
+- **FAIL**: Test failed (indicates a bug)
+- **SKIP**: Test skipped (hardware not available, read-only mode, or feature not supported)
+
+## Running Without Hardware
+
+The test suite can run even without DPLL hardware:
+- Help and version tests will PASS
+- Show commands may SKIP if no devices/pins are available
+- SET operations will SKIP (or in read-only mode)
+- Error handling tests will PASS
+
+## Interpreting Results
+
+### Expected Behavior
+
+Without hardware (default mode):
+- Help/version tests: PASS
+- Show operations: SKIP (no devices)
+- SET operations: SKIP (read-only mode, default)
+- Error handling: PASS
+
+With hardware (default read-only mode):
+- Help/version tests: PASS
+- Show operations: PASS
+- SET operations: SKIP (read-only mode, default)
+- Error handling: PASS
+
+With hardware (--enable-set mode):
+- Most tests should PASS
+- Some SET operations may SKIP if hardware doesn't support them
+
+### Common Issues
+
+1. **No Python CLI**: Some comparison tests will SKIP
+2. **No jq**: JSON comparison tests will SKIP
+3. **No hardware**: Most tests will SKIP (this is OK)
+4. **Permission denied**: Use read-only mode or run with appropriate permissions
+
+## Examples
+
+Test on production system (safe, default):
+```bash
+./test_dpll.sh
+```
+
+Test with full SET operations (requires test hardware):
+```bash
+./test_dpll.sh --enable-set
+```
+
+Test and save results:
+```bash
+./test_dpll.sh 2>&1 | tee test-results.log
+```
+
+Test with SET operations and save results:
+```bash
+./test_dpll.sh --enable-set 2>&1 | tee test-results-full.log
+```
