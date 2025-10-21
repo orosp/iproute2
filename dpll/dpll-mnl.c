@@ -346,8 +346,6 @@ static int attr_pin_cb(const struct nlattr *attr, void *data)
 /* Device printing from netlink attributes */
 static void dpll_device_print_attrs(struct nlattr **tb)
 {
-	open_json_object(NULL);
-
 	if (tb[DPLL_A_ID])
 		print_uint(PRINT_ANY, "id", "device id %u",
 			   mnl_attr_get_u32(tb[DPLL_A_ID]));
@@ -412,11 +410,9 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 			pr_out("  mode-supported: %s\n", dpll_mode_name(mode));
 		}
 	}
-
-	close_json_object();
 }
 
-/* Callback for device get/dump */
+/* Callback for device get (single) */
 static int cmd_device_show_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_MAX + 1] = {};
@@ -424,6 +420,21 @@ static int cmd_device_show_cb(const struct nlmsghdr *nlh, void *data)
 
 	mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
 	dpll_device_print_attrs(tb);
+
+	return MNL_CB_OK;
+}
+
+/* Callback for device dump (multiple) - wraps each device in object */
+static int cmd_device_show_dump_cb(const struct nlmsghdr *nlh, void *data)
+{
+	struct nlattr *tb[DPLL_A_MAX + 1] = {};
+	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+
+	mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
+
+	open_json_object(NULL);
+	dpll_device_print_attrs(tb);
+	close_json_object();
 
 	return MNL_CB_OK;
 }
@@ -457,7 +468,7 @@ static int cmd_device_show_dump(struct dpll *dpll)
 	/* Open JSON array for multiple devices */
 	open_json_array(PRINT_JSON, "device");
 
-	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_show_cb, NULL);
+	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_show_dump_cb, NULL);
 	if (err < 0) {
 		pr_err("Failed to dump devices\n");
 		close_json_array(PRINT_JSON, NULL);
@@ -759,8 +770,6 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 {
 	struct nlattr *attr;
 
-	open_json_object(NULL);
-
 	if (tb[DPLL_A_PIN_ID])
 		print_uint(PRINT_ANY, "id", "pin id %u",
 			   mnl_attr_get_u32(tb[DPLL_A_PIN_ID]));
@@ -1018,11 +1027,9 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		}
 		close_json_array(PRINT_JSON, NULL);
 	}
-
-	close_json_object();
 }
 
-/* Callback for pin get/dump */
+/* Callback for pin get (single) */
 static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
@@ -1030,6 +1037,21 @@ static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 
 	mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
 	dpll_pin_print_attrs(tb);
+
+	return MNL_CB_OK;
+}
+
+/* Callback for pin dump (multiple) - wraps each pin in object */
+static int cmd_pin_show_dump_cb(const struct nlmsghdr *nlh, void *data)
+{
+	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
+	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+
+	mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
+
+	open_json_object(NULL);
+	dpll_pin_print_attrs(tb);
+	close_json_object();
 
 	return MNL_CB_OK;
 }
@@ -1067,7 +1089,7 @@ static int cmd_pin_show_dump(struct dpll *dpll, bool has_device_id, __u32 device
 	/* Open JSON array for multiple pins */
 	open_json_array(PRINT_JSON, "pin");
 
-	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_show_cb, NULL);
+	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_show_dump_cb, NULL);
 	if (err < 0) {
 		pr_err("Failed to dump pins\n");
 		close_json_array(PRINT_JSON, NULL);
