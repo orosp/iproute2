@@ -1486,8 +1486,6 @@ static int cmd_pin_set(struct dpll *dpll)
 
 out:
 	free(ref_syncs);
-	free(parent_devs);
-	free(parent_pins);
 	dpll_pin_set_req_free(req);
 	return ret;
 }
