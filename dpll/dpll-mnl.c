@@ -350,7 +350,7 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 	print_string(PRINT_FP, NULL, ":\n", NULL);
 
 	if (tb[DPLL_A_MODULE_NAME])
-		print_string(PRINT_ANY, "module_name",
+		print_string(PRINT_ANY, "module-name",
 			     "  module-name: %s\n",
 			     mnl_attr_get_str(tb[DPLL_A_MODULE_NAME]));
 
@@ -359,10 +359,15 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 			     "  mode: %s\n",
 			     dpll_mode_name(mnl_attr_get_u32(tb[DPLL_A_MODE])));
 
-	if (tb[DPLL_A_CLOCK_ID])
-		print_0xhex(PRINT_ANY, "clock_id",
-			    "  clock-id: 0x%llx\n",
-			    mnl_attr_get_u64(tb[DPLL_A_CLOCK_ID]));
+	if (tb[DPLL_A_CLOCK_ID]) {
+		if (is_json_context())
+			print_u64(PRINT_JSON, "clock-id", NULL,
+				  mnl_attr_get_u64(tb[DPLL_A_CLOCK_ID]));
+		else
+			print_0xhex(PRINT_FP, "clock-id",
+				    "  clock-id: 0x%llx\n",
+				    mnl_attr_get_u64(tb[DPLL_A_CLOCK_ID]));
+	}
 
 	if (tb[DPLL_A_TYPE])
 		print_string(PRINT_ANY, "type",
@@ -370,12 +375,12 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 			     dpll_type_name(mnl_attr_get_u32(tb[DPLL_A_TYPE])));
 
 	if (tb[DPLL_A_LOCK_STATUS])
-		print_string(PRINT_ANY, "lock_status",
+		print_string(PRINT_ANY, "lock-status",
 			     "  lock-status: %s\n",
 			     dpll_lock_status_name(mnl_attr_get_u32(tb[DPLL_A_LOCK_STATUS])));
 
 	if (tb[DPLL_A_LOCK_STATUS_ERROR])
-		print_string(PRINT_ANY, "lock_status_error",
+		print_string(PRINT_ANY, "lock-status-error",
 			     "  lock-status-error: %s\n",
 			     dpll_lock_status_error_name(mnl_attr_get_u32(tb[DPLL_A_LOCK_STATUS_ERROR])));
 
@@ -396,7 +401,7 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 		struct nlattr *attr;
 
 		if (is_json_context()) {
-			open_json_array(PRINT_JSON, "mode_supported");
+			open_json_array(PRINT_JSON, "mode-supported");
 		} else {
 			pr_out("  mode-supported:");
 		}
