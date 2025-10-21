@@ -774,8 +774,6 @@ struct multi_attr_ctx {
 /* Pin printing from netlink attributes */
 static void dpll_pin_print_attrs(struct nlattr **tb)
 {
-	struct nlattr *attr;
-
 	if (tb[DPLL_A_PIN_ID])
 		print_uint(PRINT_ANY, "id", "pin id %u",
 			   mnl_attr_get_u32(tb[DPLL_A_PIN_ID]));
