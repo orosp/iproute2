@@ -765,6 +765,12 @@ static void dpll_pin_capabilities_name(__u32 capabilities)
 		pr_out(" direction-can-change");
 }
 
+/* Helper structure for multi-attr collection */
+struct parent_device_ctx {
+	int count;
+	struct nlattr *entries[32];  /* Max 32 parent devices */
+};
+
 /* Pin printing from netlink attributes */
 static void dpll_pin_print_attrs(struct nlattr **tb)
 {
@@ -928,13 +934,17 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print parent-device relationships */
 	if (tb[DPLL_A_PIN_PARENT_DEVICE]) {
+		struct parent_device_ctx *ctx = (struct parent_device_ctx *)tb[DPLL_A_PIN_PARENT_DEVICE];
+		int i;
+
 		open_json_array(PRINT_JSON, "parent-device");
 		if (!is_json_context())
 			pr_out("  parent-device:\n");
 
-		mnl_attr_for_each_nested(attr, tb[DPLL_A_PIN_PARENT_DEVICE]) {
+		/* Iterate through all collected parent-device entries */
+		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_parent[DPLL_A_PIN_MAX + 1] = {};
-			mnl_attr_parse_nested(attr, attr_pin_cb, tb_parent);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_parent);
 
 			open_json_object(NULL);
 			if (!is_json_context())
@@ -1029,13 +1039,36 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	}
 }
 
+/* Helper callback to collect multi-attr parent-device entries */
+static int collect_parent_device_cb(const struct nlattr *attr, void *data)
+{
+	struct parent_device_ctx *ctx = data;
+	int type = mnl_attr_get_type(attr);
+
+	if (type == DPLL_A_PIN_PARENT_DEVICE && ctx->count < 32) {
+		ctx->entries[ctx->count++] = (struct nlattr *)attr;
+	}
+	return MNL_CB_OK;
+}
+
 /* Callback for pin get (single) */
 static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+	struct parent_device_ctx parent_ctx = {0};
 
+	/* First parse to get main attributes */
 	mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
+
+	/* Collect all parent-device multi-attr entries */
+	mnl_attr_parse(nlh, sizeof(*genl), collect_parent_device_cb, &parent_ctx);
+
+	/* Temporarily clear tb[PARENT_DEVICE] and pass parent_ctx */
+	tb[DPLL_A_PIN_PARENT_DEVICE] = NULL;
+	if (parent_ctx.count > 0)
+		tb[DPLL_A_PIN_PARENT_DEVICE] = (struct nlattr *)&parent_ctx;
+
 	dpll_pin_print_attrs(tb);
 
 	return MNL_CB_OK;
