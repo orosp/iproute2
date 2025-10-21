@@ -99,9 +99,14 @@ TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
 SKIPPED_TESTS=0
+DMESG_ERRORS=0
 
 # Create test directory
 mkdir -p "$TEST_DIR"
+
+# Store initial dmesg state
+DMESG_BASELINE="$TEST_DIR/dmesg_baseline.txt"
+dmesg > "$DMESG_BASELINE" 2>/dev/null || touch "$DMESG_BASELINE"
 
 # Cleanup on exit
 cleanup() {
@@ -133,10 +138,19 @@ print_result() {
 		PASS)
 			echo -e "  ${GREEN}${BOLD}${CHECK}${NC} ${GREEN}PASS${NC} ${DIM}│${NC} $test_name"
 			PASSED_TESTS=$((PASSED_TESTS + 1))
+			# Check dmesg for errors after successful test
+			if ! check_dmesg_errors "$test_name"; then
+				# Test passed but caused kernel errors - mark as FAIL
+				echo -e "  ${RED}${BOLD}${CROSS}${NC} ${RED}FAIL${NC} ${DIM}│${NC} $test_name ${RED}(kernel netlink errors)${NC}"
+				FAILED_TESTS=$((FAILED_TESTS + 1))
+				PASSED_TESTS=$((PASSED_TESTS - 1))
+			fi
 			;;
 		FAIL)
 			echo -e "  ${RED}${BOLD}${CROSS}${NC} ${RED}FAIL${NC} ${DIM}│${NC} $test_name"
 			FAILED_TESTS=$((FAILED_TESTS + 1))
+			# Still check dmesg for additional context
+			check_dmesg_errors "$test_name" > /dev/null 2>&1
 			;;
 		SKIP)
 			echo -e "  ${YELLOW}${SKIP_MARK}${NC} ${YELLOW}SKIP${NC} ${DIM}│${NC} ${DIM}$test_name${NC}"
@@ -151,6 +165,33 @@ check_command() {
 		echo -e "${RED}Error: $1 not found${NC}"
 		return 1
 	fi
+	return 0
+}
+
+# Check dmesg for netlink errors since baseline
+check_dmesg_errors() {
+	local test_name="$1"
+	local dmesg_current="$TEST_DIR/dmesg_current.txt"
+
+	# Get current dmesg
+	dmesg > "$dmesg_current" 2>/dev/null || return 0
+
+	# Find new netlink errors (lines that appear in current but not in baseline)
+	local new_errors=$(diff "$DMESG_BASELINE" "$dmesg_current" 2>/dev/null | \
+		grep "^>" | \
+		grep -i "netlink.*dpll\|netlink.*attribute.*invalid" | \
+		grep -v "netlink.*test" || true)
+
+	if [ -n "$new_errors" ]; then
+		echo -e "${RED}  ⚠ Kernel netlink errors detected after test: $test_name${NC}"
+		echo "$new_errors" | while IFS= read -r line; do
+			# Remove leading "> " from diff output
+			echo -e "    ${DIM}${line#> }${NC}"
+		done
+		DMESG_ERRORS=$((DMESG_ERRORS + 1))
+		return 1
+	fi
+
 	return 0
 }
 
@@ -1360,6 +1401,12 @@ print_summary() {
 	printf "${CYAN}${BOX_V}${NC}  ${YELLOW}%-30s${NC} ${YELLOW}${BOLD}%4d${NC} / %-4d   ${DIM}(%3d%%)${NC}  ${CYAN}${BOX_V}${NC}\n" "○ Skipped:" $SKIPPED_TESTS $TOTAL_TESTS $skip_pct
 
 	echo -e "${CYAN}${BOX_VR}$(printf '%*s' $width '' | tr ' ' "$BOX_H")${BOX_VL}${NC}"
+
+	# Print dmesg errors if any
+	if [ $DMESG_ERRORS -gt 0 ]; then
+		printf "${CYAN}${BOX_V}${NC}  ${RED}⚠ Kernel Errors:${NC} ${RED}${BOLD}%4d${NC} test(s) triggered netlink errors ${CYAN}${BOX_V}${NC}\n" $DMESG_ERRORS
+		echo -e "${CYAN}${BOX_VR}$(printf '%*s' $width '' | tr ' ' "$BOX_H")${BOX_VL}${NC}"
+	fi
 
 	# Print result
 	if [ $FAILED_TESTS -eq 0 ]; then
