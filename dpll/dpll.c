@@ -1214,11 +1214,17 @@ static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 	}
 
 	/* Replace tb entries with contexts */
-	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ? (struct nlattr *)&parent_dev_ctx : NULL;
-	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ? (struct nlattr *)&parent_pin_ctx : NULL;
-	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ? (struct nlattr *)&ref_sync_ctx : NULL;
-	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ? (struct nlattr *)&freq_supp_ctx : NULL;
-	tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] = esync_freq_supp_ctx.count > 0 ? (struct nlattr *)&esync_freq_supp_ctx : NULL;
+	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ?
+		(struct nlattr *)&parent_dev_ctx : NULL;
+	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ?
+		(struct nlattr *)&parent_pin_ctx : NULL;
+	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ?
+		(struct nlattr *)&ref_sync_ctx : NULL;
+	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ?
+		(struct nlattr *)&freq_supp_ctx : NULL;
+	tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] =
+		esync_freq_supp_ctx.count > 0 ?
+		(struct nlattr *)&esync_freq_supp_ctx : NULL;
 
 	dpll_pin_print_attrs(tb);
 
@@ -1306,11 +1312,17 @@ static int cmd_pin_show_dump_cb(const struct nlmsghdr *nlh, void *data)
 	}
 
 	/* Replace tb entries with contexts */
-	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ? (struct nlattr *)&parent_dev_ctx : NULL;
-	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ? (struct nlattr *)&parent_pin_ctx : NULL;
-	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ? (struct nlattr *)&ref_sync_ctx : NULL;
-	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ? (struct nlattr *)&freq_supp_ctx : NULL;
-	tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] = esync_freq_supp_ctx.count > 0 ? (struct nlattr *)&esync_freq_supp_ctx : NULL;
+	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ?
+		(struct nlattr *)&parent_dev_ctx : NULL;
+	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ?
+		(struct nlattr *)&parent_pin_ctx : NULL;
+	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ?
+		(struct nlattr *)&ref_sync_ctx : NULL;
+	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ?
+		(struct nlattr *)&freq_supp_ctx : NULL;
+	tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] =
+		esync_freq_supp_ctx.count > 0 ?
+		(struct nlattr *)&esync_freq_supp_ctx : NULL;
 
 	open_json_object(NULL);
 	dpll_pin_print_attrs(tb);
@@ -1888,11 +1900,104 @@ static int cmd_monitor_cb(const struct nlmsghdr *nlh, void *data)
 	case DPLL_CMD_PIN_DELETE_NTF: {
 		if (genl->cmd == DPLL_CMD_PIN_DELETE_NTF)
 			cmd_name = "PIN_DELETE";
+
+		/* Multi-attr contexts for pin notifications */
+		struct multi_attr_ctx parent_dev_ctx = {0};
+		struct multi_attr_ctx parent_pin_ctx = {0};
+		struct multi_attr_ctx ref_sync_ctx = {0};
+		struct multi_attr_ctx freq_supp_ctx = {0};
+		struct multi_attr_ctx esync_freq_supp_ctx = {0};
+		struct multi_attr_collector collector = {0};
 		struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
+		int count;
+
+		/* Pass 1: Count multi-attr occurrences and allocate */
+		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_DEVICE);
+		if (count > 0 && multi_attr_ctx_init(&parent_dev_ctx, count) < 0)
+			goto pin_ntf_err;
+
+		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_PIN);
+		if (count > 0 && multi_attr_ctx_init(&parent_pin_ctx, count) < 0)
+			goto pin_ntf_err;
+
+		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_REFERENCE_SYNC);
+		if (count > 0 && multi_attr_ctx_init(&ref_sync_ctx, count) < 0)
+			goto pin_ntf_err;
+
+		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_FREQUENCY_SUPPORTED);
+		if (count > 0 && multi_attr_ctx_init(&freq_supp_ctx, count) < 0)
+			goto pin_ntf_err;
+
+		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
+		if (count > 0 && multi_attr_ctx_init(&esync_freq_supp_ctx, count) < 0)
+			goto pin_ntf_err;
+
+		/* Pass 2: Collect multi-attr entries */
+		if (parent_dev_ctx.entries) {
+			collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
+			collector.ctx = &parent_dev_ctx;
+			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		}
+
+		if (parent_pin_ctx.entries) {
+			collector.attr_type = DPLL_A_PIN_PARENT_PIN;
+			collector.ctx = &parent_pin_ctx;
+			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		}
+
+		if (ref_sync_ctx.entries) {
+			collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
+			collector.ctx = &ref_sync_ctx;
+			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		}
+
+		if (freq_supp_ctx.entries) {
+			collector.attr_type = DPLL_A_PIN_FREQUENCY_SUPPORTED;
+			collector.ctx = &freq_supp_ctx;
+			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		}
+
+		if (esync_freq_supp_ctx.entries) {
+			collector.attr_type = DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED;
+			collector.ctx = &esync_freq_supp_ctx;
+			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		}
+
+		/* Pass 3: Parse remaining single attributes */
 		mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
+
+		/* Replace tb entries with contexts */
+		tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ?
+			(struct nlattr *)&parent_dev_ctx : NULL;
+		tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ?
+			(struct nlattr *)&parent_pin_ctx : NULL;
+		tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ?
+			(struct nlattr *)&ref_sync_ctx : NULL;
+		tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ?
+			(struct nlattr *)&freq_supp_ctx : NULL;
+		tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] =
+			esync_freq_supp_ctx.count > 0 ?
+			(struct nlattr *)&esync_freq_supp_ctx : NULL;
+
 		pr_out("[%s] ", cmd_name);
 		dpll_pin_print_attrs(tb);
+
+		/* Cleanup */
+		multi_attr_ctx_free(&parent_dev_ctx);
+		multi_attr_ctx_free(&parent_pin_ctx);
+		multi_attr_ctx_free(&ref_sync_ctx);
+		multi_attr_ctx_free(&freq_supp_ctx);
+		multi_attr_ctx_free(&esync_freq_supp_ctx);
 		break;
+
+pin_ntf_err:
+		pr_err("Failed to allocate memory for multi-attr processing\n");
+		multi_attr_ctx_free(&parent_dev_ctx);
+		multi_attr_ctx_free(&parent_pin_ctx);
+		multi_attr_ctx_free(&ref_sync_ctx);
+		multi_attr_ctx_free(&freq_supp_ctx);
+		multi_attr_ctx_free(&esync_freq_supp_ctx);
+		return MNL_CB_ERROR;
 	}
 	default:
 		pr_err("Unknown notification command: %d\n", genl->cmd);
