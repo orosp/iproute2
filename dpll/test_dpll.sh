@@ -117,9 +117,9 @@ DMESG_ERRORS=0
 # Create test directory
 mkdir -p "$TEST_DIR"
 
-# Store initial dmesg state
-DMESG_BASELINE="$TEST_DIR/dmesg_baseline.txt"
-dmesg > "$DMESG_BASELINE" 2>/dev/null || touch "$DMESG_BASELINE"
+# Store initial dmesg state (count of lines, not content)
+DMESG_BASELINE_COUNT="$TEST_DIR/dmesg_baseline_count.txt"
+dmesg 2>/dev/null | wc -l > "$DMESG_BASELINE_COUNT" || echo "0" > "$DMESG_BASELINE_COUNT"
 
 # Cleanup on exit
 cleanup() {
@@ -203,14 +203,26 @@ run_test_command() {
 check_dmesg_errors() {
 	local test_name="$1"
 	local command_executed="$2"
-	local dmesg_current="$TEST_DIR/dmesg_current.txt"
+	local baseline_count
+	local current_count
+	local new_lines
 
-	# Get current dmesg
-	dmesg > "$dmesg_current" 2>/dev/null || return 0
+	# Read baseline count
+	baseline_count=$(cat "$DMESG_BASELINE_COUNT" 2>/dev/null || echo "0")
 
-	# Find new netlink errors (lines that appear in current but not in baseline)
-	local new_errors=$(diff "$DMESG_BASELINE" "$dmesg_current" 2>/dev/null | \
-		grep "^>" | \
+	# Get current dmesg line count
+	current_count=$(dmesg 2>/dev/null | wc -l || echo "0")
+
+	# If no new lines, nothing to check
+	if [ "$current_count" -le "$baseline_count" ]; then
+		return 0
+	fi
+
+	# Get only NEW lines (everything after baseline_count)
+	new_lines=$(dmesg 2>/dev/null | tail -n +$((baseline_count + 1)) || true)
+
+	# Check for netlink errors in new lines
+	local new_errors=$(echo "$new_lines" | \
 		grep -i "netlink.*dpll\|netlink.*attribute.*invalid" | \
 		grep -v "netlink.*test" || true)
 
@@ -220,16 +232,18 @@ check_dmesg_errors() {
 			echo -e "    ${YELLOW}Command: $command_executed${NC}"
 		fi
 		echo "$new_errors" | while IFS= read -r line; do
-			# Remove leading "> " from diff output
-			echo -e "    ${DIM}${line#> }${NC}"
+			echo -e "    ${DIM}${line}${NC}"
 		done
 		DMESG_ERRORS=$((DMESG_ERRORS + 1))
 
-		# Update baseline to current state so subsequent tests don't report the same errors
-		cp "$dmesg_current" "$DMESG_BASELINE"
+		# Update baseline to current count so subsequent tests don't report the same errors
+		echo "$current_count" > "$DMESG_BASELINE_COUNT"
 
 		return 1
 	fi
+
+	# Update baseline even if no errors found
+	echo "$current_count" > "$DMESG_BASELINE_COUNT"
 
 	return 0
 }
