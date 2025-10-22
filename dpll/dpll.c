@@ -546,9 +546,9 @@ static int cmd_device_set(struct dpll *dpll)
 				return -EINVAL;
 			}
 			if (dpll_argv_match(dpll, "true") || dpll_argv_match(dpll, "1")) {
-				mnl_attr_put_u8(nlh, DPLL_A_PHASE_OFFSET_MONITOR, 1);
+				mnl_attr_put_u32(nlh, DPLL_A_PHASE_OFFSET_MONITOR, 1);
 			} else if (dpll_argv_match(dpll, "false") || dpll_argv_match(dpll, "0")) {
-				mnl_attr_put_u8(nlh, DPLL_A_PHASE_OFFSET_MONITOR, 0);
+				mnl_attr_put_u32(nlh, DPLL_A_PHASE_OFFSET_MONITOR, 0);
 			} else {
 				pr_err("invalid phase-offset-monitor value: %s (use true/false)\n",
 				       dpll_argv(dpll));
