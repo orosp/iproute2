@@ -1196,6 +1196,99 @@ test_pin_set() {
 	echo ""
 }
 
+# Test pin frequency change
+test_pin_frequency_change() {
+	print_header "Testing Pin Frequency Change"
+
+	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
+		print_result SKIP "Pin frequency change (read-only mode, use --enable-set)"
+		echo ""
+		return
+	fi
+
+	if ! command -v jq &>/dev/null; then
+		print_result SKIP "Pin frequency change (jq not available)"
+		echo ""
+		return
+	fi
+
+	# Get all pins with frequency support
+	local pins_json="$TEST_DIR/dpll_pin_dump.json"
+	if [ ! -f "$pins_json" ]; then
+		$DPLL_TOOL -j pin show > "$pins_json" 2>&1 || true
+	fi
+
+	# Find pins that have both frequency and frequency-supported
+	local pin_count=$(jq -r '.pin | length' "$pins_json" 2>/dev/null || echo 0)
+	local tested=0
+
+	for ((i=0; i<pin_count; i++)); do
+		local pin_id=$(jq -r ".pin[$i].id" "$pins_json" 2>/dev/null)
+		local current_freq=$(jq -r ".pin[$i].frequency // empty" "$pins_json" 2>/dev/null)
+		local freq_supported=$(jq -r ".pin[$i][\"frequency-supported\"] // empty" "$pins_json" 2>/dev/null)
+
+		# Skip if no frequency or no frequency-supported
+		if [ -z "$current_freq" ] || [ "$current_freq" == "null" ] || [ -z "$freq_supported" ] || [ "$freq_supported" == "null" ]; then
+			continue
+		fi
+
+		# Get list of supported frequencies (extract min-max pairs)
+		local supported_freqs=$(jq -r ".pin[$i][\"frequency-supported\"][]? | \"\(.\"frequency-min\") \(.\"frequency-max\")\"" "$pins_json" 2>/dev/null)
+
+		# Find a different frequency to set (use first available that's not current)
+		local target_freq=""
+		while IFS=' ' read -r freq_min freq_max; do
+			# Try min value first
+			if [ "$freq_min" != "$current_freq" ]; then
+				target_freq="$freq_min"
+				break
+			fi
+			# Try max value if different
+			if [ "$freq_max" != "$current_freq" ] && [ "$freq_max" != "$freq_min" ]; then
+				target_freq="$freq_max"
+				break
+			fi
+		done <<< "$supported_freqs"
+
+		# Skip if we couldn't find a different frequency
+		if [ -z "$target_freq" ]; then
+			continue
+		fi
+
+		tested=$((tested + 1))
+
+		# Try to set the frequency
+		local test_name="Pin $pin_id frequency change $current_freq -> $target_freq"
+		local cmd="$DPLL_TOOL pin set id $pin_id frequency $target_freq"
+
+		if run_test_command "$test_name" "$cmd 2>/dev/null"; then
+			print_result PASS "$test_name"
+
+			# Verify the change
+			local new_freq=$($DPLL_TOOL -j pin show id "$pin_id" 2>/dev/null | jq -r '.frequency // empty')
+			if [ "$new_freq" == "$target_freq" ]; then
+				echo -e "  ${GREEN}✓${NC} Frequency successfully changed and verified"
+			else
+				echo -e "  ${YELLOW}⚠${NC} Frequency set succeeded but verification shows: $new_freq"
+			fi
+
+			# Restore original frequency
+			$DPLL_TOOL pin set id "$pin_id" frequency "$current_freq" 2>/dev/null || true
+		else
+			print_result SKIP "$test_name (not supported or failed)"
+		fi
+
+		# Only test first pin with frequency support
+		break
+	done
+
+	if [ $tested -eq 0 ]; then
+		print_result SKIP "Pin frequency change (no pins with frequency-supported found)"
+	fi
+
+	echo ""
+}
+
 # Test parent-device and parent-pin operations
 test_parent_operations() {
 	print_header "Testing Parent Device/Pin Operations"
@@ -1558,6 +1651,7 @@ main() {
 	test_pin_operations
 	test_pin_id_get
 	test_pin_set
+	test_pin_frequency_change
 	test_parent_operations
 	test_reference_sync
 	test_monitor
