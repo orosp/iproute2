@@ -1287,6 +1287,183 @@ test_pin_frequency_change() {
 	echo ""
 }
 
+# Test pin priority changes with capability checking
+test_pin_priority_capability() {
+	print_header "Testing Pin Priority with Capability Checking"
+
+	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
+		print_result SKIP "Pin priority capability test (read-only mode, use --enable-set)"
+		echo ""
+		return
+	fi
+
+	# Get all pins
+	local all_pins_json="$TEST_DIR/pin_prio_test.json"
+	$DPLL_TOOL -j pin show > "$all_pins_json" 2>/dev/null || true
+	local pin_count=$(jq -r '.pin | length' "$all_pins_json" 2>/dev/null || echo 0)
+
+	if [ "$pin_count" -eq 0 ]; then
+		print_result SKIP "Pin priority capability test (no pins available)"
+		echo ""
+		return
+	fi
+
+	local found_changeable=0
+	local found_not_changeable=0
+
+	# Test 1: Find pin WITH priority-can-change capability AND top-level prio
+	for ((i=0; i<pin_count; i++)); do
+		local pin_id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
+		local has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
+		local prio=$(jq -r ".pin[$i].prio // empty" "$all_pins_json" 2>/dev/null)
+
+		if [ "$has_prio_cap" = "true" ] && [ -n "$prio" ]; then
+			found_changeable=1
+			local test_name="Pin $pin_id: priority change (has priority-can-change)"
+			local new_prio=$((prio + 10))
+
+			# Try to change priority
+			local error_file="$TEST_DIR/prio_change_error.txt"
+			$DPLL_TOOL pin set id "$pin_id" prio "$new_prio" > /dev/null 2>"$error_file"
+			local exit_code=$?
+
+			if [ $exit_code -eq 0 ]; then
+				# Verify the change
+				local current_prio=$($DPLL_TOOL -j pin show id "$pin_id" 2>/dev/null | jq -r '.pin[0].prio // empty')
+				if [ "$current_prio" = "$new_prio" ]; then
+					print_result PASS "$test_name"
+					# Restore
+					$DPLL_TOOL pin set id "$pin_id" prio "$prio" 2>/dev/null || true
+				else
+					print_result FAIL "$test_name (set succeeded but value not changed: $current_prio != $new_prio)"
+				fi
+			else
+				print_result FAIL "$test_name (set failed despite capability)"
+				if [ -s "$error_file" ]; then
+					echo "  ${DIM}Error: $(cat "$error_file")${NC}"
+				fi
+			fi
+			break
+		fi
+	done
+
+	if [ $found_changeable -eq 0 ]; then
+		print_result SKIP "Priority change test (no pin with priority-can-change and top-level prio)"
+	fi
+
+	# Test 2: Find pin WITHOUT priority-can-change capability at top-level
+	# (pin might have capabilities array but not contain priority-can-change, OR no capabilities at all)
+	for ((i=0; i<pin_count; i++)); do
+		local pin_id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
+		local caps=$(jq -r ".pin[$i].capabilities // []" "$all_pins_json" 2>/dev/null)
+		local has_prio_cap=false
+
+		# Check if capabilities exist and contain priority-can-change
+		if [ "$caps" != "[]" ] && [ "$caps" != "null" ]; then
+			has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
+		fi
+
+		# Test pin without priority-can-change at top-level
+		if [ "$has_prio_cap" != "true" ]; then
+			found_not_changeable=1
+			local test_name="Pin $pin_id: priority change rejected (no top-level priority-can-change)"
+			local test_prio=100
+
+			# Try to change priority - SHOULD FAIL
+			local error_file="$TEST_DIR/prio_nochange_error.txt"
+			$DPLL_TOOL pin set id "$pin_id" prio "$test_prio" > /dev/null 2>"$error_file"
+			local exit_code=$?
+
+			if [ $exit_code -ne 0 ]; then
+				# Expected: command failed
+				print_result PASS "$test_name"
+			else
+				# Command succeeded - check if it actually changed anything
+				local current_prio=$($DPLL_TOOL -j pin show id "$pin_id" 2>/dev/null | jq -r '.pin[0].prio // empty')
+				if [ -z "$current_prio" ]; then
+					# No prio attribute created - OK
+					print_result PASS "$test_name (command succeeded but no prio created)"
+				else
+					# Prio was created or changed - BAD!
+					print_result FAIL "$test_name (prio changed to $current_prio despite missing capability!)"
+					echo -e "  ${DIM}Pin should not allow prio changes without capability${NC}"
+				fi
+			fi
+			break
+		fi
+	done
+
+	if [ $found_not_changeable -eq 0 ]; then
+		print_result SKIP "Priority rejection test (all pins have priority-can-change capability)"
+	fi
+
+	# Test 3: Test parent-device priority change (if applicable)
+	local found_parent_prio=0
+	for ((i=0; i<pin_count; i++)); do
+		local pin_id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
+		local has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
+		local parent_count=$(jq -r ".pin[$i].\"parent-device\" | length" "$all_pins_json" 2>/dev/null || echo 0)
+
+		if [ "$has_prio_cap" = "true" ] && [ "$parent_count" -gt 0 ]; then
+			# Get first parent-device with prio
+			local parent_id=$(jq -r ".pin[$i].\"parent-device\"[0].\"parent-id\" // empty" "$all_pins_json" 2>/dev/null)
+			local parent_prio=$(jq -r ".pin[$i].\"parent-device\"[0].prio // empty" "$all_pins_json" 2>/dev/null)
+
+			if [ -n "$parent_id" ] && [ -n "$parent_prio" ]; then
+				found_parent_prio=1
+				local test_name="Pin $pin_id: parent-device $parent_id priority change"
+				local new_prio=$((parent_prio + 5))
+
+				# Try to change parent-device priority
+				local error_file="$TEST_DIR/parent_prio_error.txt"
+				$DPLL_TOOL pin set id "$pin_id" parent-device "$parent_id" prio "$new_prio" > /dev/null 2>"$error_file"
+				local exit_code=$?
+
+				if [ $exit_code -eq 0 ]; then
+					# Verify the change
+					sleep 1  # Give time for kernel to update
+					local verify_json="$TEST_DIR/parent_prio_verify.json"
+					$DPLL_TOOL -j pin show id "$pin_id" > "$verify_json" 2>/dev/null
+
+					# NOTE: 'pin show id X' returns {id:..., parent-device:[...]}, NOT {pin:[{...}]}
+					# So we use top-level queries, not .pin[0]
+					local has_parent=$(jq -r ".\"parent-device\" // null" "$verify_json" 2>/dev/null)
+					if [ "$has_parent" = "null" ]; then
+						print_result FAIL "$test_name (parent-device disappeared after set)"
+					else
+						# Find the specific parent-device entry
+						local current_prio=$(jq -r ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id) | .prio // empty" "$verify_json" 2>/dev/null)
+
+						if [ -z "$current_prio" ]; then
+							print_result FAIL "$test_name (cannot read prio after set - parent-device not found)"
+							echo -e "  ${DIM}Looking for parent-id: $parent_id${NC}"
+							echo -e "  ${DIM}Available parent-ids: $(jq -r '."parent-device"[]."parent-id"' "$verify_json" 2>/dev/null | tr '\n' ' ')${NC}"
+						elif [ "$current_prio" = "$new_prio" ]; then
+							print_result PASS "$test_name"
+							# Restore
+							$DPLL_TOOL pin set id "$pin_id" parent-device "$parent_id" prio "$parent_prio" 2>/dev/null || true
+						else
+							print_result FAIL "$test_name (set succeeded but value not changed: got '$current_prio', expected '$new_prio')"
+						fi
+					fi
+				else
+					print_result FAIL "$test_name (set failed despite capability)"
+					if [ -s "$error_file" ]; then
+						echo -e "  ${DIM}Error: $(cat "$error_file")${NC}"
+					fi
+				fi
+				break
+			fi
+		fi
+	done
+
+	if [ $found_parent_prio -eq 0 ]; then
+		print_result SKIP "Parent-device priority change test (no suitable pin found)"
+	fi
+
+	echo ""
+}
+
 # Test parent-device and parent-pin operations
 test_parent_operations() {
 	print_header "Testing Parent Device/Pin Operations"
@@ -1479,6 +1656,568 @@ test_monitor() {
 	echo ""
 }
 
+# Advanced monitor test with event verification
+test_monitor_events() {
+	print_header "Testing Monitor Event Detection"
+
+	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
+		print_result SKIP "Monitor event detection (read-only mode, use --enable-set)"
+		echo ""
+		return
+	fi
+
+	# Get all pins in JSON
+	local all_pins_json="$TEST_DIR/monitor_all_pins.json"
+	$DPLL_TOOL -j pin show > "$all_pins_json" 2>/dev/null || true
+
+	# Find a pin suitable for testing (has changeable attributes with top-level values)
+	local pin_id=""
+	local test_attr=""
+	local orig_value=""
+	local new_value=""
+	local pin_count=$(jq -r '.pin | length' "$all_pins_json" 2>/dev/null || echo 0)
+
+	# Strategy 1: Find pin with priority-can-change capability AND has prio attribute
+	for ((i=0; i<pin_count; i++)); do
+		local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
+		local has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
+		local prio=$(jq -r ".pin[$i].prio // empty" "$all_pins_json" 2>/dev/null)
+
+		if [ "$has_prio_cap" = "true" ] && [ -n "$prio" ]; then
+			pin_id="$id"
+			test_attr="prio"
+			orig_value="$prio"
+			new_value=$((prio + 5))
+			break
+		fi
+	done
+
+	# Strategy 2: Find pin with direction-can-change capability
+	if [ -z "$pin_id" ]; then
+		for ((i=0; i<pin_count; i++)); do
+			local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
+			local has_dir_cap=$(jq -r ".pin[$i].capabilities | contains([\"direction-can-change\"])" "$all_pins_json" 2>/dev/null)
+			local direction=$(jq -r ".pin[$i].direction // empty" "$all_pins_json" 2>/dev/null)
+
+			if [ "$has_dir_cap" = "true" ] && [ -n "$direction" ]; then
+				pin_id="$id"
+				test_attr="direction"
+				orig_value="$direction"
+				if [ "$direction" = "input" ]; then
+					new_value="output"
+				else
+					new_value="input"
+				fi
+				break
+			fi
+		done
+	fi
+
+	# Strategy 3: Find pin with changeable frequency
+	if [ -z "$pin_id" ]; then
+		for ((i=0; i<pin_count; i++)); do
+			local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
+			local freq=$(jq -r ".pin[$i].frequency // empty" "$all_pins_json" 2>/dev/null)
+			local freq_count=$(jq -r ".pin[$i].\"frequency-supported\" | length" "$all_pins_json" 2>/dev/null || echo 0)
+
+			if [ -n "$freq" ] && [ "$freq_count" -gt 1 ]; then
+				# Find different frequency
+				local alt_freq=$(jq -r ".pin[$i].\"frequency-supported\"[1].\"frequency-min\" // empty" "$all_pins_json" 2>/dev/null)
+				if [ -n "$alt_freq" ] && [ "$alt_freq" != "$freq" ]; then
+					pin_id="$id"
+					test_attr="frequency"
+					orig_value="$freq"
+					new_value="$alt_freq"
+					break
+				fi
+			fi
+		done
+	fi
+
+	if [ -z "$pin_id" ]; then
+		print_result SKIP "Monitor event detection (no suitable pin found with changeable attributes)"
+		echo ""
+		return
+	fi
+
+	echo -e "  ${DIM}Using pin $pin_id, testing $test_attr changes ($orig_value <-> $new_value)${NC}"
+
+	# Start monitor in background capturing output
+	local monitor_output="$TEST_DIR/monitor_output.txt"
+	rm -f "$monitor_output"
+	# Use ./dpll directly, not wrapper (wrapper adds sleep which isn't needed for monitor)
+	timeout 30 ./dpll monitor > "$monitor_output" 2>&1 &
+	local monitor_pid=$!
+
+	# Give monitor time to start and subscribe to multicast
+	sleep 2
+
+	# Check if monitor is running
+	if ! kill -0 $monitor_pid 2>/dev/null; then
+		print_result SKIP "Monitor event detection (monitor failed to start)"
+		if [ -f "$monitor_output" ]; then
+			echo "  ${DIM}Monitor error: $(head -1 "$monitor_output")${NC}"
+		fi
+		echo ""
+		return
+	fi
+
+	local operations_performed=0
+	local test_name=""
+
+	# Note: Device SET operations (phase-offset-monitor, phase-offset-avg-factor)
+	# do NOT trigger kernel notifications automatically. Only driver-initiated
+	# notifications (lock status change, etc.) are sent for devices.
+	# We test only PIN operations which DO trigger notifications via __dpll_pin_change_ntf()
+
+	# Perform all operations first, then check results after monitor is stopped
+	# Operation 1: Change the selected attribute
+	$DPLL_TOOL pin set id "$pin_id" "$test_attr" "$new_value" 2>/dev/null || true
+	sleep 2
+	operations_performed=$((operations_performed + 1))
+
+	# Restore
+	$DPLL_TOOL pin set id "$pin_id" "$test_attr" "$orig_value" 2>/dev/null || true
+	sleep 2
+	operations_performed=$((operations_performed + 1))
+
+	# Operation 2-3: Multiple rapid changes of the same attribute
+	for i in 1 2; do
+		$DPLL_TOOL pin set id "$pin_id" "$test_attr" "$new_value" 2>/dev/null || true
+		sleep 1
+		$DPLL_TOOL pin set id "$pin_id" "$test_attr" "$orig_value" 2>/dev/null || true
+		sleep 1
+		operations_performed=$((operations_performed + 2))
+	done
+
+	# Operation 4: Verify GET operations don't generate new events
+	local pre_get_count=$(wc -l < "$monitor_output" 2>/dev/null || echo 0)
+	$DPLL_TOOL pin show id "$pin_id" > /dev/null 2>&1 || true
+	$DPLL_TOOL pin show > /dev/null 2>&1 || true
+	sleep 1
+	local post_get_count=$(wc -l < "$monitor_output" 2>/dev/null || echo 0)
+
+	# Kill monitor and wait for it to flush output
+	kill $monitor_pid 2>/dev/null || true
+	wait $monitor_pid 2>/dev/null || true
+	sleep 1  # Give time for final output flush
+
+	# Now check the results after monitor has stopped
+	# Test 1: Did we capture PIN_CHANGE events?
+	local pin_change_count=$(grep -c "\[PIN_CHANGE\]" "$monitor_output" 2>/dev/null | head -1)
+	pin_change_count=${pin_change_count:-0}
+	if [ "$pin_change_count" -gt 0 ]; then
+		print_result PASS "Monitor captured PIN_CHANGE events ($pin_change_count events)"
+	else
+		print_result FAIL "Monitor did not capture any PIN_CHANGE events"
+	fi
+
+	# Test 2: Did events match our pin?
+	local our_pin_events=$(grep -cE "\[PIN_CHANGE\].*pin id $pin_id:" "$monitor_output" 2>/dev/null | head -1)
+	our_pin_events=${our_pin_events:-0}
+	if [ "$our_pin_events" -gt 0 ]; then
+		print_result PASS "Monitor captured events for pin $pin_id ($our_pin_events events)"
+	else
+		print_result FAIL "Monitor did not capture events for pin $pin_id"
+	fi
+
+	# Test 3: Did GET operations generate events?
+	if [ "$pre_get_count" -eq "$post_get_count" ]; then
+		print_result PASS "GET operations don't generate events"
+	else
+		print_result FAIL "GET operations generated events (lines: before=$pre_get_count, after=$post_get_count)"
+	fi
+
+	# Debug: Show what monitor captured (optional detailed output)
+	if [ -f "$monitor_output" ]; then
+		local line_count=$(wc -l < "$monitor_output" 2>/dev/null || echo 0)
+		echo -e "  ${DIM}Total monitor output: $line_count lines, $operations_performed SET operations performed${NC}"
+	fi
+
+	echo ""
+}
+
+# Test monitor output parity with Python CLI
+test_monitor_python_parity() {
+	print_header "Testing Monitor Output Parity with Python CLI"
+
+	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
+		print_result SKIP "Monitor parity test (read-only mode, use --enable-set)"
+		echo ""
+		return
+	fi
+
+	# Check if Python CLI is available
+	if [ ! -f "$PYTHON_CLI" ]; then
+		print_result SKIP "Monitor parity test (Python CLI not found at $PYTHON_CLI)"
+		echo ""
+		return
+	fi
+
+	if [ ! -f "$DPLL_SPEC" ]; then
+		print_result SKIP "Monitor parity test (DPLL spec not found at $DPLL_SPEC)"
+		echo ""
+		return
+	fi
+
+	# Find a pin with changeable attribute
+	local all_pins_json="$TEST_DIR/parity_all_pins.json"
+	./dpll -j pin show > "$all_pins_json" 2>/dev/null
+
+	local pin_count=$(jq '.pin | length' "$all_pins_json" 2>/dev/null || echo 0)
+	local pin_id=""
+	local freq=""
+	local alt_freq=""
+	local test_attr=""
+
+	# Strategy 1: Find pin with changeable frequency (2+ supported frequencies)
+	for ((i=0; i<pin_count; i++)); do
+		local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
+		local current_freq=$(jq -r ".pin[$i].frequency // empty" "$all_pins_json" 2>/dev/null)
+		local freq_count=$(jq -r ".pin[$i].\"frequency-supported\" | length" "$all_pins_json" 2>/dev/null || echo 0)
+
+		if [ -n "$current_freq" ] && [ "$freq_count" -ge 2 ]; then
+			local freq1=$(jq -r ".pin[$i].\"frequency-supported\"[0].\"frequency-min\"" "$all_pins_json" 2>/dev/null)
+			local freq2=$(jq -r ".pin[$i].\"frequency-supported\"[1].\"frequency-min\"" "$all_pins_json" 2>/dev/null)
+
+			# Make sure we pick a frequency different from current
+			local selected_freq=""
+			if [ "$freq1" != "$current_freq" ]; then
+				selected_freq="$freq1"
+			elif [ "$freq2" != "$current_freq" ]; then
+				selected_freq="$freq2"
+			fi
+
+			if [ -n "$selected_freq" ] && [ "$selected_freq" != "$current_freq" ]; then
+				pin_id="$id"
+				freq="$current_freq"
+				alt_freq="$selected_freq"
+				test_attr="frequency"
+				break
+			fi
+		fi
+	done
+
+	# Strategy 2: Find pin with priority-can-change and parent-device prio
+	if [ -z "$pin_id" ]; then
+		for ((i=0; i<pin_count; i++)); do
+			local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
+			local has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
+			local parent_id=$(jq -r ".pin[$i].\"parent-device\"[0].\"parent-id\" // empty" "$all_pins_json" 2>/dev/null)
+			local parent_prio=$(jq -r ".pin[$i].\"parent-device\"[0].prio // empty" "$all_pins_json" 2>/dev/null)
+
+			if [ "$has_prio_cap" = "true" ] && [ -n "$parent_id" ] && [ -n "$parent_prio" ]; then
+				pin_id="$id"
+				test_attr="parent-device prio"
+				freq="$parent_prio"
+				alt_freq=$((parent_prio + 5))
+				break
+			fi
+		done
+	fi
+
+	if [ -z "$pin_id" ]; then
+		print_result SKIP "Monitor parity test (no pin with changeable attribute found)"
+		echo ""
+		return
+	fi
+
+	echo -e "  ${DIM}Testing pin $pin_id, attribute: $test_attr (current: $freq, change to: $alt_freq)${NC}"
+
+	# Start both monitors
+	local c_monitor_out="$TEST_DIR/c_monitor.txt"
+	local py_monitor_out="$TEST_DIR/py_monitor.txt"
+	rm -f "$c_monitor_out" "$py_monitor_out"
+
+	# Start C monitor
+	timeout 15 ./dpll monitor > "$c_monitor_out" 2>&1 &
+	local c_pid=$!
+
+	# Start Python monitor (use python3 -u for unbuffered output!)
+	timeout 15 python3 -u "$PYTHON_CLI" --spec "$DPLL_SPEC" --subscribe monitor > "$py_monitor_out" 2>&1 &
+	local py_pid=$!
+
+	sleep 3  # Give both monitors time to start and subscribe
+
+	# Check both are running
+	if ! kill -0 $c_pid 2>/dev/null; then
+		print_result SKIP "Monitor parity test (C monitor failed to start)"
+		kill $py_pid 2>/dev/null || true
+		echo ""
+		return
+	fi
+
+	if ! kill -0 $py_pid 2>/dev/null; then
+		print_result SKIP "Monitor parity test (Python monitor failed to start)"
+		kill $c_pid 2>/dev/null || true
+		echo ""
+		return
+	fi
+
+	# Perform a change based on what attribute we found
+	if [ "$test_attr" = "frequency" ]; then
+		echo -e "  ${DIM}Changing frequency: $freq -> $alt_freq -> $freq${NC}"
+		./dpll pin set id "$pin_id" frequency "$alt_freq" 2>/dev/null || true
+		sleep 2
+		./dpll pin set id "$pin_id" frequency "$freq" 2>/dev/null || true
+		sleep 2
+	elif [ "$test_attr" = "parent-device prio" ]; then
+		# Extract parent_id from earlier search
+		local parent_id=$(jq -r ".pin[] | select(.id == $pin_id) | .\"parent-device\"[0].\"parent-id\"" "$all_pins_json" 2>/dev/null)
+		echo -e "  ${DIM}WARNING: parent-device prio changes may not trigger notifications!${NC}"
+		echo -e "  ${DIM}Changing parent-device $parent_id prio: $freq -> $alt_freq -> $freq${NC}"
+		./dpll pin set id "$pin_id" parent-device "$parent_id" prio "$alt_freq" 2>/dev/null || true
+		sleep 2
+		./dpll pin set id "$pin_id" parent-device "$parent_id" prio "$freq" 2>/dev/null || true
+		sleep 2
+	else
+		echo -e "  ${DIM}ERROR: Unknown test_attr: $test_attr${NC}"
+	fi
+
+	# Stop both monitors
+	kill $c_pid $py_pid 2>/dev/null || true
+	wait $c_pid $py_pid 2>/dev/null || true
+	sleep 1
+
+	# Save outputs to persistent location for debugging
+	local persist_dir="/tmp/dpll_monitor_parity_debug"
+	mkdir -p "$persist_dir"
+	cp "$c_monitor_out" "$persist_dir/c_monitor.txt" 2>/dev/null || true
+	cp "$py_monitor_out" "$persist_dir/py_monitor.txt" 2>/dev/null || true
+	echo -e "  ${DIM}Debug outputs saved to: $persist_dir/${NC}"
+
+	# Get file sizes for debugging
+	local c_size=$(wc -c < "$c_monitor_out" 2>/dev/null || echo 0)
+	local py_size=$(wc -c < "$py_monitor_out" 2>/dev/null || echo 0)
+
+	if [ "$c_size" -eq 0 ]; then
+		print_result FAIL "C monitor produced no output"
+		echo ""
+		return
+	fi
+
+	if [ "$py_size" -eq 0 ]; then
+		print_result FAIL "Python monitor produced no output"
+		echo -e "  ${DIM}Check $persist_dir/py_monitor.txt for errors${NC}"
+		echo ""
+		return
+	fi
+
+	# Test 1: Both captured events
+	local c_events=$(grep -c "\[PIN_CHANGE\]" "$c_monitor_out" 2>/dev/null | head -1)
+	c_events=${c_events:-0}
+	# Python CLI outputs 'name': 'pin-change-ntf' in dict format
+	local py_events=$(grep -c "'name': 'pin-change" "$py_monitor_out" 2>/dev/null | head -1)
+	py_events=${py_events:-0}
+
+	if [ "$c_events" -gt 0 ] && [ "$py_events" -gt 0 ]; then
+		print_result PASS "Both monitors captured events (C: $c_events, Python: $py_events)"
+	else
+		print_result FAIL "Event capture mismatch (C: $c_events, Python: $py_events)"
+		echo -e "  ${DIM}See $persist_dir/ for monitor outputs${NC}"
+	fi
+
+	# Test 2: Event count similarity (should be within 20% of each other)
+	if [ "$c_events" -gt 0 ] && [ "$py_events" -gt 0 ]; then
+		local diff=$((c_events > py_events ? c_events - py_events : py_events - c_events))
+		local max=$((c_events > py_events ? c_events : py_events))
+		local percent=$((diff * 100 / max))
+
+		if [ "$percent" -le 20 ]; then
+			print_result PASS "Event counts similar (C: $c_events, Python: $py_events, diff: ${percent}%)"
+		else
+			print_result FAIL "Event count mismatch too large (C: $c_events, Python: $py_events, diff: ${percent}%)"
+		fi
+	fi
+
+	# Test 3: Check C monitor output format
+	if grep -q "pin id $pin_id:" "$c_monitor_out" 2>/dev/null; then
+		print_result PASS "C monitor includes pin ID in event output"
+	else
+		print_result FAIL "C monitor missing pin ID in event output"
+	fi
+
+	# Test 4: Check Python monitor output format
+	# Python CLI uses 'id': value format (Python dict, not JSON)
+	local py_has_id=$(grep -c "'id': $pin_id" "$py_monitor_out" 2>/dev/null | head -1)
+	py_has_id=${py_has_id:-0}
+
+	if [ "$py_has_id" -gt 0 ]; then
+		print_result PASS "Python monitor includes pin ID ($py_has_id times)"
+	else
+		print_result FAIL "Python monitor missing pin ID in event output"
+		echo -e "  ${DIM}First 10 lines of Python output:${NC}"
+		head -10 "$py_monitor_out" 2>/dev/null | sed 's/^/    /' || echo "    (empty)"
+	fi
+
+	# Test 5: Verify both monitors include the changed attribute
+	if [ "$test_attr" = "frequency" ]; then
+		local c_has_attr=$(grep -c "frequency:" "$c_monitor_out" 2>/dev/null | head -1)
+		c_has_attr=${c_has_attr:-0}
+		# Python CLI uses 'frequency': value format
+		local py_has_attr=$(grep -c "'frequency':" "$py_monitor_out" 2>/dev/null | head -1)
+		py_has_attr=${py_has_attr:-0}
+
+		if [ "$c_has_attr" -gt 0 ] && [ "$py_has_attr" -gt 0 ]; then
+			print_result PASS "Both monitors captured frequency attribute (C: $c_has_attr, Python: $py_has_attr)"
+		else
+			print_result FAIL "Frequency attribute missing (C: $c_has_attr, Python: $py_has_attr)"
+		fi
+	elif [ "$test_attr" = "parent-device prio" ]; then
+		local c_has_attr=$(grep -c "prio:" "$c_monitor_out" 2>/dev/null | head -1)
+		c_has_attr=${c_has_attr:-0}
+		# Python CLI uses 'prio': value format
+		local py_has_attr=$(grep -c "'prio':" "$py_monitor_out" 2>/dev/null | head -1)
+		py_has_attr=${py_has_attr:-0}
+
+		if [ "$c_has_attr" -gt 0 ] && [ "$py_has_attr" -gt 0 ]; then
+			print_result PASS "Both monitors captured prio attribute (C: $c_has_attr, Python: $py_has_attr)"
+		else
+			print_result FAIL "Prio attribute missing (C: $c_has_attr, Python: $py_has_attr)"
+		fi
+	fi
+
+	# Test 6: Verify both monitors can parse as valid output
+	# C monitor should have legacy format lines
+	local c_legacy_lines=$(grep "pin id" "$c_monitor_out" 2>/dev/null | wc -l)
+	if [ "$c_legacy_lines" -gt 0 ]; then
+		print_result PASS "C monitor produced $c_legacy_lines legacy format event lines"
+	else
+		print_result FAIL "C monitor produced no parseable event lines"
+	fi
+
+	# Python monitor should have Python dict structure (check for 'msg': and 'name':)
+	if grep -q "'msg':" "$py_monitor_out" 2>/dev/null && grep -q "'name':" "$py_monitor_out" 2>/dev/null; then
+		print_result PASS "Python monitor output contains valid dict structure"
+	else
+		print_result FAIL "Python monitor output doesn't have expected dict structure"
+		echo -e "  ${DIM}Full Python output:${NC}"
+		cat "$py_monitor_out" 2>/dev/null | sed 's/^/    /' || echo "    (empty)"
+	fi
+
+	# Test 7: Data parity - compare field presence and values
+	if [ "$c_events" -gt 0 ] && [ "$py_events" -gt 0 ]; then
+		echo -e "  ${DIM}Verifying data parity between C and Python monitors...${NC}"
+
+		# Convert C monitor to JSON (use dpll -j -p monitor for JSON output)
+		# For now, check key fields are present in both outputs
+
+		# Check parent-device presence
+		local c_has_parent=$(grep -c "parent-device:" "$c_monitor_out" 2>/dev/null | head -1)
+		c_has_parent=${c_has_parent:-0}
+		local py_has_parent=$(grep -c "'parent-device':" "$py_monitor_out" 2>/dev/null | head -1)
+		py_has_parent=${py_has_parent:-0}
+
+		if [ "$c_has_parent" -gt 0 ] && [ "$py_has_parent" -gt 0 ]; then
+			print_result PASS "Both monitors include parent-device data"
+		elif [ "$c_has_parent" -eq 0 ] && [ "$py_has_parent" -eq 0 ]; then
+			print_result PASS "Neither monitor has parent-device (consistent)"
+		else
+			print_result FAIL "parent-device presence mismatch (C: $c_has_parent, Python: $py_has_parent)"
+			echo -e "  ${DIM}This indicates C monitor is missing multi-attr data!${NC}"
+		fi
+
+		# Check frequency-supported presence
+		local c_has_freq_supp=$(grep -c "frequency-supported:" "$c_monitor_out" 2>/dev/null | head -1)
+		c_has_freq_supp=${c_has_freq_supp:-0}
+		local py_has_freq_supp=$(grep -c "'frequency-supported':" "$py_monitor_out" 2>/dev/null | head -1)
+		py_has_freq_supp=${py_has_freq_supp:-0}
+
+		if [ "$c_has_freq_supp" -gt 0 ] && [ "$py_has_freq_supp" -gt 0 ]; then
+			print_result PASS "Both monitors include frequency-supported data"
+		elif [ "$c_has_freq_supp" -eq 0 ] && [ "$py_has_freq_supp" -eq 0 ]; then
+			print_result PASS "Neither monitor has frequency-supported (consistent)"
+		else
+			print_result FAIL "frequency-supported presence mismatch (C: $c_has_freq_supp, Python: $py_has_freq_supp)"
+		fi
+
+		# Check reference-sync presence (if pin has it)
+		local c_has_ref_sync=$(grep -c "reference-sync:" "$c_monitor_out" 2>/dev/null | head -1)
+		c_has_ref_sync=${c_has_ref_sync:-0}
+		local py_has_ref_sync=$(grep -c "'reference-sync':" "$py_monitor_out" 2>/dev/null | head -1)
+		py_has_ref_sync=${py_has_ref_sync:-0}
+
+		if [ "$c_has_ref_sync" -eq 0 ] && [ "$py_has_ref_sync" -eq 0 ]; then
+			# Both don't have it - OK
+			:
+		elif [ "$c_has_ref_sync" -gt 0 ] && [ "$py_has_ref_sync" -gt 0 ]; then
+			print_result PASS "Both monitors include reference-sync data"
+		else
+			print_result FAIL "reference-sync presence mismatch (C: $c_has_ref_sync, Python: $py_has_ref_sync)"
+		fi
+	fi
+
+	# Test 8: JSON mode data parity - use dpll -j -p monitor
+	echo -e "  ${DIM}Testing JSON monitor output parity...${NC}"
+	local c_json_out="$TEST_DIR/c_json_monitor.txt"
+	local py_json_out="$py_monitor_out"
+
+	# Start C monitor in JSON mode
+	timeout 15 ./dpll -j -p monitor > "$c_json_out" 2>&1 &
+	local c_json_pid=$!
+
+	sleep 2
+
+	# Trigger one change
+	if [ "$test_attr" = "frequency" ]; then
+		./dpll pin set id "$pin_id" frequency "$alt_freq" 2>/dev/null || true
+		sleep 2
+	fi
+
+	# Stop C JSON monitor
+	kill $c_json_pid 2>/dev/null || true
+	wait $c_json_pid 2>/dev/null || true
+	sleep 1
+
+	# Parse first event from both (if any)
+	if [ -s "$c_json_out" ] && grep -q "\"id\":" "$c_json_out" 2>/dev/null; then
+		# Extract field names from C JSON
+		local c_fields=$(grep "\"id\": $pin_id" "$c_json_out" -A 50 | grep -oP '"\K[^"]+(?=":)' | sort -u | tr '\n' ' ')
+
+		# Extract field names from Python (convert 'field': to field)
+		local py_fields=$(grep "'id': $pin_id" "$py_json_out" -A 50 | grep -oP "'\K[^']+(?=':)" | sort -u | tr '\n' ' ')
+
+		# Key fields that MUST be present in both
+		local required_fields="id module-name clock-id type frequency capabilities phase-adjust"
+		local missing_in_c=""
+		local missing_in_py=""
+
+		for field in $required_fields; do
+			if ! echo "$c_fields" | grep -qw "$field"; then
+				missing_in_c="$missing_in_c $field"
+			fi
+			if ! echo "$py_fields" | grep -qw "$field"; then
+				missing_in_py="$missing_in_py $field"
+			fi
+		done
+
+		if [ -z "$missing_in_c" ] && [ -z "$missing_in_py" ]; then
+			print_result PASS "JSON mode: both monitors have all required fields"
+		else
+			if [ -n "$missing_in_c" ]; then
+				print_result FAIL "JSON mode: C monitor missing fields:$missing_in_c"
+			fi
+			if [ -n "$missing_in_py" ]; then
+				print_result FAIL "JSON mode: Python monitor missing fields:$missing_in_py"
+			fi
+		fi
+
+		# Check multi-attr fields specifically
+		if echo "$py_fields" | grep -qw "parent-device"; then
+			if echo "$c_fields" | grep -qw "parent-device"; then
+				print_result PASS "JSON mode: both monitors have parent-device multi-attr"
+			else
+				print_result FAIL "JSON mode: Python has parent-device but C monitor doesn't"
+				echo -e "  ${DIM}C monitor is not properly parsing multi-attr fields!${NC}"
+			fi
+		fi
+	else
+		echo -e "  ${DIM}Skipping JSON parity test (no C JSON monitor output)${NC}"
+	fi
+
+	echo ""
+}
+
 # Test error handling
 test_error_handling() {
 	print_header "Testing Error Handling"
@@ -1650,9 +2389,12 @@ main() {
 	test_pin_id_get
 	test_pin_set
 	test_pin_frequency_change
+	test_pin_priority_capability
 	test_parent_operations
 	test_reference_sync
 	test_monitor
+	test_monitor_events
+	test_monitor_python_parity
 	test_json_consistency
 	test_legacy_output
 	test_json_legacy_consistency
