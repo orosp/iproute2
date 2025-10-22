@@ -1021,7 +1021,9 @@ test_device_by_id_formats() {
 		fi
 
 		# Compare attribute presence
-		local legacy_attrs=$(grep -oP '^\s*\K[a-z-]+(?=:)' "$dev_legacy" | sort | uniq)
+		# Extract id from "device id N:" and other attrs from "  name: value"
+		local legacy_attrs=$( (grep -oP 'device\s+\K[a-z-]+(?=\s+\d+:)' "$dev_legacy"; \
+		                        grep -oP '^\s+\K[a-z-]+(?=:)' "$dev_legacy") | sort | uniq)
 		local json_attrs=$(jq -r 'keys[]' "$dev_json" 2>/dev/null | sort)
 
 		# Count attributes in both
@@ -1086,7 +1088,9 @@ test_pin_by_id_formats() {
 		fi
 
 		# Compare attribute presence
-		local legacy_attrs=$(grep -oP '^\s*\K[a-z-]+(?=:)' "$pin_legacy" | sort | uniq)
+		# Extract id from "pin id N:" and other attrs from "  name: value"
+		local legacy_attrs=$( (grep -oP 'pin\s+\K[a-z-]+(?=\s+\d+:)' "$pin_legacy"; \
+		                        grep -oP '^\s+\K[a-z-]+(?=:)' "$pin_legacy") | sort | uniq)
 		local json_attrs=$(jq -r 'keys[]' "$pin_json" 2>/dev/null | sort)
 
 		local legacy_count=$(echo "$legacy_attrs" | wc -l)
