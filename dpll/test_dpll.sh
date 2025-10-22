@@ -168,10 +168,32 @@ check_command() {
 	return 0
 }
 
+# Run a test command and check dmesg after it completes
+# Usage: run_test_command "test name" "full command"
+# Returns: command exit code
+run_test_command() {
+	local test_name="$1"
+	local full_command="$2"
+	local output_file="$TEST_DIR/cmd_output_$$.txt"
+
+	# Run the command
+	eval "$full_command" > "$output_file" 2>&1
+	local exit_code=$?
+
+	# Check dmesg for errors (with command info for reporting)
+	check_dmesg_errors "$test_name" "$full_command" > /dev/null 2>&1
+
+	return $exit_code
+}
+
 # Check dmesg for netlink errors since baseline
 check_dmesg_errors() {
 	local test_name="$1"
+	local command_executed="$2"
 	local dmesg_current="$TEST_DIR/dmesg_current.txt"
+
+	# Wait for kernel to flush dmesg (kernel may log asynchronously)
+	sleep 0.1
 
 	# Get current dmesg
 	dmesg > "$dmesg_current" 2>/dev/null || return 0
@@ -184,6 +206,9 @@ check_dmesg_errors() {
 
 	if [ -n "$new_errors" ]; then
 		echo -e "${RED}  ⚠ Kernel netlink errors detected after test: $test_name${NC}"
+		if [ -n "$command_executed" ]; then
+			echo -e "    ${YELLOW}Command: $command_executed${NC}"
+		fi
 		echo "$new_errors" | while IFS= read -r line; do
 			# Remove leading "> " from diff output
 			echo -e "    ${DIM}${line#> }${NC}"
@@ -344,7 +369,11 @@ test_device_operations() {
 	local dpll_dump="$TEST_DIR/dpll_device_dump.txt"
 	local python_dump="$TEST_DIR/python_device_dump.txt"
 
-	if $DPLL_TOOL device show > "$dpll_dump" 2>&1; then
+	$DPLL_TOOL device show > "$dpll_dump" 2>&1
+	local exit_code=$?
+	check_dmesg_errors "dpll device show (dump)" "$DPLL_TOOL device show" > /dev/null 2>&1
+
+	if [ $exit_code -eq 0 ]; then
 		print_result PASS "dpll device show (dump)"
 	else
 		print_result FAIL "dpll device show (dump)"
@@ -352,7 +381,11 @@ test_device_operations() {
 
 	# Test device show with JSON
 	local dpll_json="$TEST_DIR/dpll_device_dump.json"
-	if $DPLL_TOOL -j device show > "$dpll_json" 2>&1; then
+	$DPLL_TOOL -j device show > "$dpll_json" 2>&1
+	exit_code=$?
+	check_dmesg_errors "dpll device show -j" "$DPLL_TOOL -j device show" > /dev/null 2>&1
+
+	if [ $exit_code -eq 0 ]; then
 		if jq empty "$dpll_json" 2>/dev/null; then
 			print_result PASS "dpll device show -j (valid JSON)"
 		else
@@ -568,7 +601,11 @@ test_pin_operations() {
 	local dpll_dump="$TEST_DIR/dpll_pin_dump.txt"
 	local python_dump="$TEST_DIR/python_pin_dump.txt"
 
-	if $DPLL_TOOL pin show > "$dpll_dump" 2>&1; then
+	$DPLL_TOOL pin show > "$dpll_dump" 2>&1
+	local exit_code=$?
+	check_dmesg_errors "dpll pin show (dump)" "$DPLL_TOOL pin show" > /dev/null 2>&1
+
+	if [ $exit_code -eq 0 ]; then
 		print_result PASS "dpll pin show (dump)"
 	else
 		print_result FAIL "dpll pin show (dump)"
@@ -576,7 +613,11 @@ test_pin_operations() {
 
 	# Test pin show with JSON
 	local dpll_json="$TEST_DIR/dpll_pin_dump.json"
-	if $DPLL_TOOL -j pin show > "$dpll_json" 2>&1; then
+	$DPLL_TOOL -j pin show > "$dpll_json" 2>&1
+	exit_code=$?
+	check_dmesg_errors "dpll pin show -j" "$DPLL_TOOL -j pin show" > /dev/null 2>&1
+
+	if [ $exit_code -eq 0 ]; then
 		if jq empty "$dpll_json" 2>/dev/null; then
 			print_result PASS "dpll pin show -j (valid JSON)"
 		else
@@ -1040,14 +1081,16 @@ test_device_set() {
 
 	if [ -n "$device_id" ]; then
 		# Test device set with phase-offset-monitor (read current value first)
-		if $DPLL_TOOL device set id "$device_id" phase-offset-monitor true 2>/dev/null; then
+		local cmd="$DPLL_TOOL device set id $device_id phase-offset-monitor true"
+		if run_test_command "Device set phase-offset-monitor" "$cmd 2>/dev/null"; then
 			print_result PASS "Device set phase-offset-monitor true"
 		else
 			print_result SKIP "Device set phase-offset-monitor (not supported by device)"
 		fi
 
 		# Test device set with phase-offset-avg-factor
-		if $DPLL_TOOL device set id "$device_id" phase-offset-avg-factor 10 2>/dev/null; then
+		local cmd="$DPLL_TOOL device set id $device_id phase-offset-avg-factor 10"
+		if run_test_command "Device set phase-offset-avg-factor" "$cmd 2>/dev/null"; then
 			print_result PASS "Device set phase-offset-avg-factor 10"
 		else
 			print_result SKIP "Device set phase-offset-avg-factor (not supported by device)"
