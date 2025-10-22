@@ -163,7 +163,7 @@ print_result() {
 			echo -e "  ${RED}${BOLD}${CROSS}${NC} ${RED}FAIL${NC} ${DIM}│${NC} $test_name"
 			FAILED_TESTS=$((FAILED_TESTS + 1))
 			# Still check dmesg for additional context
-			check_dmesg_errors "$test_name" > /dev/null 2>&1
+			check_dmesg_errors "$test_name"
 			;;
 		SKIP)
 			echo -e "  ${YELLOW}${SKIP_MARK}${NC} ${YELLOW}SKIP${NC} ${DIM}│${NC} ${DIM}$test_name${NC}"
@@ -194,7 +194,7 @@ run_test_command() {
 	local exit_code=$?
 
 	# Check dmesg for errors (with command info for reporting)
-	check_dmesg_errors "$test_name" "$full_command" > /dev/null 2>&1
+	check_dmesg_errors "$test_name" "$full_command"
 
 	return $exit_code
 }
@@ -395,7 +395,7 @@ test_device_operations() {
 
 	$DPLL_TOOL device show > "$dpll_dump" 2>&1
 	local exit_code=$?
-	check_dmesg_errors "dpll device show (dump)" "./dpll device show" > /dev/null 2>&1
+	check_dmesg_errors "dpll device show (dump)" "./dpll device show"
 
 	if [ $exit_code -eq 0 ]; then
 		print_result PASS "dpll device show (dump)"
@@ -407,7 +407,7 @@ test_device_operations() {
 	local dpll_json="$TEST_DIR/dpll_device_dump.json"
 	$DPLL_TOOL -j device show > "$dpll_json" 2>&1
 	exit_code=$?
-	check_dmesg_errors "dpll device show -j" "./dpll -j device show" > /dev/null 2>&1
+	check_dmesg_errors "dpll device show -j" "./dpll -j device show"
 
 	if [ $exit_code -eq 0 ]; then
 		if jq empty "$dpll_json" 2>/dev/null; then
@@ -627,7 +627,7 @@ test_pin_operations() {
 
 	$DPLL_TOOL pin show > "$dpll_dump" 2>&1
 	local exit_code=$?
-	check_dmesg_errors "dpll pin show (dump)" "./dpll pin show" > /dev/null 2>&1
+	check_dmesg_errors "dpll pin show (dump)" "./dpll pin show"
 
 	if [ $exit_code -eq 0 ]; then
 		print_result PASS "dpll pin show (dump)"
@@ -639,7 +639,7 @@ test_pin_operations() {
 	local dpll_json="$TEST_DIR/dpll_pin_dump.json"
 	$DPLL_TOOL -j pin show > "$dpll_json" 2>&1
 	exit_code=$?
-	check_dmesg_errors "dpll pin show -j" "./dpll -j pin show" > /dev/null 2>&1
+	check_dmesg_errors "dpll pin show -j" "./dpll -j pin show"
 
 	if [ $exit_code -eq 0 ]; then
 		if jq empty "$dpll_json" 2>/dev/null; then
