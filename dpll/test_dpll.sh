@@ -180,6 +180,9 @@ run_test_command() {
 	eval "$full_command" > "$output_file" 2>&1
 	local exit_code=$?
 
+	# Wait for kernel to flush dmesg (kernel may log asynchronously)
+	sleep 1
+
 	# Check dmesg for errors (with command info for reporting)
 	check_dmesg_errors "$test_name" "$full_command" > /dev/null 2>&1
 
@@ -191,9 +194,6 @@ check_dmesg_errors() {
 	local test_name="$1"
 	local command_executed="$2"
 	local dmesg_current="$TEST_DIR/dmesg_current.txt"
-
-	# Wait for kernel to flush dmesg (kernel may log asynchronously)
-	sleep 0.1
 
 	# Get current dmesg
 	dmesg > "$dmesg_current" 2>/dev/null || return 0
@@ -371,6 +371,7 @@ test_device_operations() {
 
 	$DPLL_TOOL device show > "$dpll_dump" 2>&1
 	local exit_code=$?
+	sleep 1  # Wait for kernel to flush dmesg
 	check_dmesg_errors "dpll device show (dump)" "$DPLL_TOOL device show" > /dev/null 2>&1
 
 	if [ $exit_code -eq 0 ]; then
@@ -383,6 +384,7 @@ test_device_operations() {
 	local dpll_json="$TEST_DIR/dpll_device_dump.json"
 	$DPLL_TOOL -j device show > "$dpll_json" 2>&1
 	exit_code=$?
+	sleep 1  # Wait for kernel to flush dmesg
 	check_dmesg_errors "dpll device show -j" "$DPLL_TOOL -j device show" > /dev/null 2>&1
 
 	if [ $exit_code -eq 0 ]; then
@@ -603,6 +605,7 @@ test_pin_operations() {
 
 	$DPLL_TOOL pin show > "$dpll_dump" 2>&1
 	local exit_code=$?
+	sleep 1  # Wait for kernel to flush dmesg
 	check_dmesg_errors "dpll pin show (dump)" "$DPLL_TOOL pin show" > /dev/null 2>&1
 
 	if [ $exit_code -eq 0 ]; then
@@ -615,6 +618,7 @@ test_pin_operations() {
 	local dpll_json="$TEST_DIR/dpll_pin_dump.json"
 	$DPLL_TOOL -j pin show > "$dpll_json" 2>&1
 	exit_code=$?
+	sleep 1  # Wait for kernel to flush dmesg
 	check_dmesg_errors "dpll pin show -j" "$DPLL_TOOL -j pin show" > /dev/null 2>&1
 
 	if [ $exit_code -eq 0 ]; then
