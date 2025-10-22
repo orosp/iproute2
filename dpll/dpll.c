@@ -1859,21 +1859,38 @@ static int cmd_pin(struct dpll *dpll)
 static int cmd_monitor_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+	const char *cmd_name = "UNKNOWN";
 
 	switch (genl->cmd) {
 	case DPLL_CMD_DEVICE_CREATE_NTF:
+		cmd_name = "DEVICE_CREATE";
+		/* fallthrough */
 	case DPLL_CMD_DEVICE_CHANGE_NTF:
+		if (genl->cmd == DPLL_CMD_DEVICE_CHANGE_NTF)
+			cmd_name = "DEVICE_CHANGE";
+		/* fallthrough */
 	case DPLL_CMD_DEVICE_DELETE_NTF: {
+		if (genl->cmd == DPLL_CMD_DEVICE_DELETE_NTF)
+			cmd_name = "DEVICE_DELETE";
 		struct nlattr *tb[DPLL_A_MAX + 1] = {};
 		mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
+		pr_out("[%s] ", cmd_name);
 		dpll_device_print_attrs(tb);
 		break;
 	}
 	case DPLL_CMD_PIN_CREATE_NTF:
+		cmd_name = "PIN_CREATE";
+		/* fallthrough */
 	case DPLL_CMD_PIN_CHANGE_NTF:
+		if (genl->cmd == DPLL_CMD_PIN_CHANGE_NTF)
+			cmd_name = "PIN_CHANGE";
+		/* fallthrough */
 	case DPLL_CMD_PIN_DELETE_NTF: {
+		if (genl->cmd == DPLL_CMD_PIN_DELETE_NTF)
+			cmd_name = "PIN_DELETE";
 		struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 		mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
+		pr_out("[%s] ", cmd_name);
 		dpll_pin_print_attrs(tb);
 		break;
 	}
@@ -1895,8 +1912,12 @@ static int cmd_monitor(struct dpll *dpll)
 	/* Subscribe to monitor multicast group */
 	ret = mnlg_socket_group_add(&dpll->nlg, "monitor");
 	if (ret) {
-		pr_err("Failed to subscribe to monitor group\n");
+		pr_err("Failed to subscribe to monitor group: %s\n", strerror(errno));
 		return ret;
+	}
+
+	if (!dpll->json_output) {
+		pr_out("Monitoring DPLL events (Press Ctrl+C to stop)...\n");
 	}
 
 	/* Setup signal handler for graceful exit */
@@ -1938,7 +1959,10 @@ static int cmd_monitor(struct dpll *dpll)
 		/* Data available, receive and process */
 		ret = mnlu_gen_socket_recv_run(&dpll->nlg, cmd_monitor_cb, NULL);
 		if (ret < 0) {
-			pr_err("Failed to receive notifications\n");
+			/* Only print error if we're still supposed to be running.
+			 * If monitor_running is false, we're shutting down gracefully. */
+			if (monitor_running)
+				pr_err("Failed to receive notifications: %s\n", strerror(errno));
 			break;
 		}
 	}
