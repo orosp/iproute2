@@ -1034,8 +1034,7 @@ test_device_by_id_formats() {
 			if [ "$legacy_count" -eq "$json_count" ]; then
 				print_result PASS "Device $device_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
 			else
-				print_result PASS "Device $device_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
-				echo -e "  ${YELLOW}⚠ Attribute count mismatch:${NC}"
+				print_result FAIL "Device $device_id attribute count mismatch (legacy:$legacy_count, json:$json_count)"
 				echo -e "    ${DIM}Legacy attributes:${NC}"
 				echo "$legacy_attrs" | sed 's/^/      /'
 				echo -e "    ${DIM}JSON attributes:${NC}"
@@ -1100,8 +1099,7 @@ test_pin_by_id_formats() {
 			if [ "$legacy_count" -eq "$json_count" ]; then
 				print_result PASS "Pin $pin_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
 			else
-				print_result PASS "Pin $pin_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
-				echo -e "  ${YELLOW}⚠ Attribute count mismatch:${NC}"
+				print_result FAIL "Pin $pin_id attribute count mismatch (legacy:$legacy_count, json:$json_count)"
 				echo -e "    ${DIM}Legacy attributes:${NC}"
 				echo "$legacy_attrs" | sed 's/^/      /'
 				echo -e "    ${DIM}JSON attributes:${NC}"
