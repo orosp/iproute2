@@ -89,10 +89,23 @@ else
 fi
 
 # Paths
-DPLL_TOOL="./dpll"
+DPLL_TOOL_BIN="./dpll"
 PYTHON_CLI="/root/net-next/tools/net/ynl/pyynl/cli.py"
 DPLL_SPEC="/root/net-next/Documentation/netlink/specs/dpll.yaml"
 TEST_DIR="/tmp/dpll_test_$$"
+
+# Create wrapper script for dpll tool that adds sleep after execution
+# This ensures kernel has time to flush dmesg messages
+DPLL_TOOL="$TEST_DIR/dpll_wrapper.sh"
+mkdir -p "$TEST_DIR"
+cat > "$DPLL_TOOL" << 'WRAPPER_EOF'
+#!/bin/bash
+./dpll "$@"
+exit_code=$?
+sleep 1
+exit $exit_code
+WRAPPER_EOF
+chmod +x "$DPLL_TOOL"
 
 # Test counters
 TOTAL_TESTS=0
@@ -176,12 +189,9 @@ run_test_command() {
 	local full_command="$2"
 	local output_file="$TEST_DIR/cmd_output_$$.txt"
 
-	# Run the command
+	# Run the command (DPLL_TOOL wrapper already adds sleep)
 	eval "$full_command" > "$output_file" 2>&1
 	local exit_code=$?
-
-	# Wait for kernel to flush dmesg (kernel may log asynchronously)
-	sleep 1
 
 	# Check dmesg for errors (with command info for reporting)
 	check_dmesg_errors "$test_name" "$full_command" > /dev/null 2>&1
@@ -238,7 +248,7 @@ check_prerequisites() {
 	fi
 
 	# Check if dpll tool exists
-	if [ ! -x "$DPLL_TOOL" ]; then
+	if [ ! -x "./dpll" ]; then
 		echo -e "${RED}Error: dpll tool not found or not executable${NC}"
 		echo "Build it first: make"
 		exit 1
@@ -371,8 +381,7 @@ test_device_operations() {
 
 	$DPLL_TOOL device show > "$dpll_dump" 2>&1
 	local exit_code=$?
-	sleep 1  # Wait for kernel to flush dmesg
-	check_dmesg_errors "dpll device show (dump)" "$DPLL_TOOL device show" > /dev/null 2>&1
+	check_dmesg_errors "dpll device show (dump)" "./dpll device show" > /dev/null 2>&1
 
 	if [ $exit_code -eq 0 ]; then
 		print_result PASS "dpll device show (dump)"
@@ -384,8 +393,7 @@ test_device_operations() {
 	local dpll_json="$TEST_DIR/dpll_device_dump.json"
 	$DPLL_TOOL -j device show > "$dpll_json" 2>&1
 	exit_code=$?
-	sleep 1  # Wait for kernel to flush dmesg
-	check_dmesg_errors "dpll device show -j" "$DPLL_TOOL -j device show" > /dev/null 2>&1
+	check_dmesg_errors "dpll device show -j" "./dpll -j device show" > /dev/null 2>&1
 
 	if [ $exit_code -eq 0 ]; then
 		if jq empty "$dpll_json" 2>/dev/null; then
@@ -605,8 +613,7 @@ test_pin_operations() {
 
 	$DPLL_TOOL pin show > "$dpll_dump" 2>&1
 	local exit_code=$?
-	sleep 1  # Wait for kernel to flush dmesg
-	check_dmesg_errors "dpll pin show (dump)" "$DPLL_TOOL pin show" > /dev/null 2>&1
+	check_dmesg_errors "dpll pin show (dump)" "./dpll pin show" > /dev/null 2>&1
 
 	if [ $exit_code -eq 0 ]; then
 		print_result PASS "dpll pin show (dump)"
@@ -618,8 +625,7 @@ test_pin_operations() {
 	local dpll_json="$TEST_DIR/dpll_pin_dump.json"
 	$DPLL_TOOL -j pin show > "$dpll_json" 2>&1
 	exit_code=$?
-	sleep 1  # Wait for kernel to flush dmesg
-	check_dmesg_errors "dpll pin show -j" "$DPLL_TOOL -j pin show" > /dev/null 2>&1
+	check_dmesg_errors "dpll pin show -j" "./dpll -j pin show" > /dev/null 2>&1
 
 	if [ $exit_code -eq 0 ]; then
 		if jq empty "$dpll_json" 2>/dev/null; then
