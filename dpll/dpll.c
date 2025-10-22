@@ -831,22 +831,34 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		/* Iterate through all collected frequency-supported entries */
 		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_freq[DPLL_A_PIN_MAX + 1] = {};
+			__u64 freq_min = 0, freq_max = 0;
+
 			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_freq);
 
-			open_json_object(NULL);
-			if (!is_json_context())
-				pr_out("    ");
-
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
-				print_lluint(PRINT_ANY, "frequency-min", "%llu",
-					     mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MIN]));
-			if (!is_json_context())
-				pr_out("-");
+				freq_min = mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MIN]);
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
-				print_lluint(PRINT_ANY, "frequency-max", "%llu",
-					     mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MAX]));
-			if (!is_json_context())
-				pr_out(" Hz\n");
+				freq_max = mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MAX]);
+
+			open_json_object(NULL);
+
+			/* JSON: always print both min and max */
+			if (is_json_context()) {
+				if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
+					print_lluint(PRINT_JSON, "frequency-min", NULL, freq_min);
+				if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
+					print_lluint(PRINT_JSON, "frequency-max", NULL, freq_max);
+			} else {
+				/* Legacy: if min == max, print single value, else print range */
+				pr_out("    ");
+				if (freq_min == freq_max) {
+					print_lluint(PRINT_FP, NULL, "%llu Hz\n", freq_min);
+				} else {
+					print_lluint(PRINT_FP, NULL, "%llu", freq_min);
+					pr_out("-");
+					print_lluint(PRINT_FP, NULL, "%llu Hz\n", freq_max);
+				}
+			}
 
 			close_json_object();
 		}
@@ -911,22 +923,34 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		/* Iterate through all collected esync-frequency-supported entries */
 		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_freq[DPLL_A_PIN_MAX + 1] = {};
+			__u64 freq_min = 0, freq_max = 0;
+
 			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_freq);
 
-			open_json_object(NULL);
-			if (!is_json_context())
-				pr_out("    ");
-
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
-				print_lluint(PRINT_ANY, "frequency-min", "%llu",
-					     mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MIN]));
-			if (!is_json_context())
-				pr_out("-");
+				freq_min = mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MIN]);
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
-				print_lluint(PRINT_ANY, "frequency-max", "%llu",
-					     mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MAX]));
-			if (!is_json_context())
-				pr_out(" Hz\n");
+				freq_max = mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MAX]);
+
+			open_json_object(NULL);
+
+			/* JSON: always print both min and max */
+			if (is_json_context()) {
+				if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
+					print_lluint(PRINT_JSON, "frequency-min", NULL, freq_min);
+				if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
+					print_lluint(PRINT_JSON, "frequency-max", NULL, freq_max);
+			} else {
+				/* Legacy: if min == max, print single value, else print range */
+				pr_out("    ");
+				if (freq_min == freq_max) {
+					print_lluint(PRINT_FP, NULL, "%llu Hz\n", freq_min);
+				} else {
+					print_lluint(PRINT_FP, NULL, "%llu", freq_min);
+					pr_out("-");
+					print_lluint(PRINT_FP, NULL, "%llu Hz\n", freq_max);
+				}
+			}
 
 			close_json_object();
 		}
