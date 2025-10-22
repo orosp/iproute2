@@ -1029,7 +1029,20 @@ test_device_by_id_formats() {
 		local json_count=$(echo "$json_attrs" | wc -l)
 
 		if [ "$legacy_count" -gt 0 ] && [ "$json_count" -gt 0 ]; then
-			print_result PASS "Device $device_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
+			if [ "$legacy_count" -eq "$json_count" ]; then
+				print_result PASS "Device $device_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
+			else
+				print_result PASS "Device $device_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
+				echo -e "  ${YELLOW}⚠ Attribute count mismatch:${NC}"
+				echo -e "    ${DIM}Legacy attributes:${NC}"
+				echo "$legacy_attrs" | sed 's/^/      /'
+				echo -e "    ${DIM}JSON attributes:${NC}"
+				echo "$json_attrs" | sed 's/^/      /'
+				echo -e "    ${DIM}In legacy but not JSON:${NC}"
+				comm -23 <(echo "$legacy_attrs") <(echo "$json_attrs") | sed 's/^/      /' || echo "      (none)"
+				echo -e "    ${DIM}In JSON but not legacy:${NC}"
+				comm -13 <(echo "$legacy_attrs") <(echo "$json_attrs") | sed 's/^/      /' || echo "      (none)"
+			fi
 		else
 			print_result FAIL "Device $device_id missing attributes (legacy:$legacy_count, json:$json_count)"
 		fi
@@ -1080,7 +1093,20 @@ test_pin_by_id_formats() {
 		local json_count=$(echo "$json_attrs" | wc -l)
 
 		if [ "$legacy_count" -gt 0 ] && [ "$json_count" -gt 0 ]; then
-			print_result PASS "Pin $pin_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
+			if [ "$legacy_count" -eq "$json_count" ]; then
+				print_result PASS "Pin $pin_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
+			else
+				print_result PASS "Pin $pin_id has attributes in both formats (legacy:$legacy_count, json:$json_count)"
+				echo -e "  ${YELLOW}⚠ Attribute count mismatch:${NC}"
+				echo -e "    ${DIM}Legacy attributes:${NC}"
+				echo "$legacy_attrs" | sed 's/^/      /'
+				echo -e "    ${DIM}JSON attributes:${NC}"
+				echo "$json_attrs" | sed 's/^/      /'
+				echo -e "    ${DIM}In legacy but not JSON:${NC}"
+				comm -23 <(echo "$legacy_attrs") <(echo "$json_attrs") | sed 's/^/      /' || echo "      (none)"
+				echo -e "    ${DIM}In JSON but not legacy:${NC}"
+				comm -13 <(echo "$legacy_attrs") <(echo "$json_attrs") | sed 's/^/      /' || echo "      (none)"
+			fi
 		else
 			print_result FAIL "Pin $pin_id missing attributes (legacy:$legacy_count, json:$json_count)"
 		fi
