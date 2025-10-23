@@ -703,6 +703,7 @@ static void cmd_pin_help(void)
 	pr_err("                                                          [ prio PRIO ]\n");
 	pr_err("                                                          [ state STATE ] ]\n");
 	pr_err("                               [ parent-pin PIN_ID [ state STATE ] ]\n");
+	pr_err("                               [ phase-adjust-gran GRAN ]\n");
 	pr_err("                               [ phase-adjust ADJUST ]\n");
 	pr_err("                               [ esync-frequency FREQ ]\n");
 	pr_err("                               [ reference-sync PIN_ID [ state STATE ] ]\n");
@@ -884,7 +885,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		}
 	}
 
-	/* Print phase adjust range and current value */
+	/* Print phase adjust range, granularity and current value */
 	if (tb[DPLL_A_PIN_PHASE_ADJUST_MIN])
 		print_int(PRINT_ANY, "phase-adjust-min",
 			  "  phase-adjust-min: %d\n",
@@ -894,6 +895,11 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		print_int(PRINT_ANY, "phase-adjust-max",
 			  "  phase-adjust-max: %d\n",
 			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST_MAX]));
+
+	if (tb[DPLL_A_PIN_PHASE_ADJUST_GRAN])
+		print_int(PRINT_ANY, "phase-adjust-gran",
+			  "  phase-adjust-gran: %d\n",
+			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST_GRAN]));
 
 	if (tb[DPLL_A_PIN_PHASE_ADJUST])
 		print_int(PRINT_ANY, "phase-adjust",
@@ -1519,6 +1525,20 @@ static int cmd_pin_set(struct dpll *dpll)
 				       dpll_argv(dpll));
 				return -EINVAL;
 			}
+			dpll_arg_inc(dpll);
+		} else if (dpll_argv_match(dpll, "phase-adjust-gran")) {
+			__s32 phase_gran;
+
+			dpll_arg_inc(dpll);
+			if (dpll_argc(dpll) == 0) {
+				pr_err("phase-adjust-gran requires an argument\n");
+				return -EINVAL;
+			}
+			if (get_s32(&phase_gran, dpll_argv(dpll), 0)) {
+				pr_err("invalid phase-adjust-gran: %s\n", dpll_argv(dpll));
+				return -EINVAL;
+			}
+			mnl_attr_put_u32(nlh, DPLL_A_PIN_PHASE_ADJUST_GRAN, phase_gran);
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "phase-adjust")) {
 			__s32 phase_adjust;
