@@ -1002,10 +1002,15 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 				print_string(PRINT_ANY, "state",
 					     " state %s",
 					     dpll_pin_state_name(mnl_attr_get_u32(tb_parent[DPLL_A_PIN_STATE])));
-			if (tb_parent[DPLL_A_PIN_PHASE_OFFSET])
+			if (tb_parent[DPLL_A_PIN_PHASE_OFFSET]) {
+				struct nlattr *attr = tb_parent[DPLL_A_PIN_PHASE_OFFSET];
+				__s64 phase_offset;
+
+				phase_offset = (__s64)mnl_attr_get_u64(attr);
 				print_lluint(PRINT_ANY, "phase-offset",
 					     " phase-offset %lld",
-					     mnl_attr_get_u64(tb_parent[DPLL_A_PIN_PHASE_OFFSET]));
+					     (long long)phase_offset);
+			}
 
 			if (!is_json_context())
 				pr_out("\n");
