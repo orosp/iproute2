@@ -410,6 +410,18 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 			pr_out("  mode-supported: %s\n", dpll_mode_name(mode));
 		}
 	}
+
+	if (tb[DPLL_A_PHASE_OFFSET_MONITOR]) {
+		__u32 value = mnl_attr_get_u32(tb[DPLL_A_PHASE_OFFSET_MONITOR]);
+		print_string(PRINT_ANY, "phase-offset-monitor",
+			     "  phase-offset-monitor: %s\n",
+			     value ? "enabled" : "disabled");
+	}
+
+	if (tb[DPLL_A_PHASE_OFFSET_AVG_FACTOR])
+		print_uint(PRINT_ANY, "phase-offset-avg-factor",
+			   "  phase-offset-avg-factor: %u\n",
+			   mnl_attr_get_u32(tb[DPLL_A_PHASE_OFFSET_AVG_FACTOR]));
 }
 
 /* Callback for device get (single) */
