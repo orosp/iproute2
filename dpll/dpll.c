@@ -103,6 +103,48 @@ pr_out(const char *fmt, ...)
 	va_end(ap);
 }
 
+/* Helper to parse pin state argument */
+static int dpll_parse_state(struct dpll *dpll, __u32 *state)
+{
+	if (dpll_argv_match(dpll, "connected")) {
+		*state = DPLL_PIN_STATE_CONNECTED;
+	} else if (dpll_argv_match(dpll, "disconnected")) {
+		*state = DPLL_PIN_STATE_DISCONNECTED;
+	} else if (dpll_argv_match(dpll, "selectable")) {
+		*state = DPLL_PIN_STATE_SELECTABLE;
+	} else {
+		pr_err("invalid state: %s (use connected/disconnected/selectable)\n",
+		       dpll_argv(dpll));
+		return -EINVAL;
+	}
+	return 0;
+}
+
+/* Helper to parse pin direction argument */
+static int dpll_parse_direction(struct dpll *dpll, __u32 *direction)
+{
+	if (dpll_argv_match(dpll, "input")) {
+		*direction = DPLL_PIN_DIRECTION_INPUT;
+	} else if (dpll_argv_match(dpll, "output")) {
+		*direction = DPLL_PIN_DIRECTION_OUTPUT;
+	} else {
+		pr_err("invalid direction: %s (use input/output)\n",
+		       dpll_argv(dpll));
+		return -EINVAL;
+	}
+	return 0;
+}
+
+/* Helper to check if next argument exists */
+static int dpll_arg_required(struct dpll *dpll, const char *arg_name)
+{
+	if (dpll_argc(dpll) == 0) {
+		pr_err("%s requires an argument\n", arg_name);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static void help(void)
 {
 	pr_err("Usage: dpll [ OPTIONS ] OBJECT { COMMAND | help }\n"
@@ -1510,38 +1552,24 @@ static int cmd_pin_set(struct dpll *dpll)
 			mnl_attr_put_u32(nlh, DPLL_A_PIN_PRIO, prio);
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "direction")) {
+			__u32 direction;
+
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("direction requires an argument\n");
+			if (dpll_arg_required(dpll, "direction"))
 				return -EINVAL;
-			}
-			if (dpll_argv_match(dpll, "input")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION, DPLL_PIN_DIRECTION_INPUT);
-			} else if (dpll_argv_match(dpll, "output")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION, DPLL_PIN_DIRECTION_OUTPUT);
-			} else {
-				pr_err("invalid direction: %s (use input/output)\n",
-				       dpll_argv(dpll));
+			if (dpll_parse_direction(dpll, &direction))
 				return -EINVAL;
-			}
+			mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION, direction);
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "state")) {
+			__u32 state;
+
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("state requires an argument\n");
+			if (dpll_arg_required(dpll, "state"))
 				return -EINVAL;
-			}
-			if (dpll_argv_match(dpll, "connected")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, DPLL_PIN_STATE_CONNECTED);
-			} else if (dpll_argv_match(dpll, "disconnected")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, DPLL_PIN_STATE_DISCONNECTED);
-			} else if (dpll_argv_match(dpll, "selectable")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, DPLL_PIN_STATE_SELECTABLE);
-			} else {
-				pr_err("invalid state: %s (use connected/disconnected/selectable)\n",
-				       dpll_argv(dpll));
+			if (dpll_parse_state(dpll, &state))
 				return -EINVAL;
-			}
+			mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "phase-adjust-gran")) {
 			__s32 phase_gran;
@@ -1607,21 +1635,14 @@ static int cmd_pin_set(struct dpll *dpll)
 			/* Parse optional parent-device attributes */
 			while (dpll_argc(dpll) > 0) {
 				if (dpll_argv_match(dpll, "direction")) {
+					__u32 direction;
+
 					dpll_arg_inc(dpll);
-					if (dpll_argc(dpll) == 0) {
-						pr_err("direction requires an argument\n");
+					if (dpll_arg_required(dpll, "direction"))
 						return -EINVAL;
-					}
-					if (dpll_argv_match(dpll, "input")) {
-						mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION,
-								 DPLL_PIN_DIRECTION_INPUT);
-					} else if (dpll_argv_match(dpll, "output")) {
-						mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION,
-								 DPLL_PIN_DIRECTION_OUTPUT);
-					} else {
-						pr_err("invalid direction: %s\n", dpll_argv(dpll));
+					if (dpll_parse_direction(dpll, &direction))
 						return -EINVAL;
-					}
+					mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION, direction);
 					dpll_arg_inc(dpll);
 				} else if (dpll_argv_match(dpll, "prio")) {
 					__u32 prio;
@@ -1637,24 +1658,14 @@ static int cmd_pin_set(struct dpll *dpll)
 					mnl_attr_put_u32(nlh, DPLL_A_PIN_PRIO, prio);
 					dpll_arg_inc(dpll);
 				} else if (dpll_argv_match(dpll, "state")) {
+					__u32 state;
+
 					dpll_arg_inc(dpll);
-					if (dpll_argc(dpll) == 0) {
-						pr_err("state requires an argument\n");
+					if (dpll_arg_required(dpll, "state"))
 						return -EINVAL;
-					}
-					if (dpll_argv_match(dpll, "connected")) {
-						mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-								 DPLL_PIN_STATE_CONNECTED);
-					} else if (dpll_argv_match(dpll, "disconnected")) {
-						mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-								 DPLL_PIN_STATE_DISCONNECTED);
-					} else if (dpll_argv_match(dpll, "selectable")) {
-						mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-								 DPLL_PIN_STATE_SELECTABLE);
-					} else {
-						pr_err("invalid state: %s\n", dpll_argv(dpll));
+					if (dpll_parse_state(dpll, &state))
 						return -EINVAL;
-					}
+					mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
 					dpll_arg_inc(dpll);
 				} else {
 					/* Not a parent-device attribute, break to parse next option */
@@ -1686,24 +1697,14 @@ static int cmd_pin_set(struct dpll *dpll)
 
 			/* Parse optional parent-pin state */
 			if (dpll_argc(dpll) > 0 && dpll_argv_match(dpll, "state")) {
+				__u32 state;
+
 				dpll_arg_inc(dpll);
-				if (dpll_argc(dpll) == 0) {
-					pr_err("state requires an argument\n");
+				if (dpll_arg_required(dpll, "state"))
 					return -EINVAL;
-				}
-				if (dpll_argv_match(dpll, "connected")) {
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-							 DPLL_PIN_STATE_CONNECTED);
-				} else if (dpll_argv_match(dpll, "disconnected")) {
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-							 DPLL_PIN_STATE_DISCONNECTED);
-				} else if (dpll_argv_match(dpll, "selectable")) {
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-							 DPLL_PIN_STATE_SELECTABLE);
-				} else {
-					pr_err("invalid state: %s\n", dpll_argv(dpll));
+				if (dpll_parse_state(dpll, &state))
 					return -EINVAL;
-				}
+				mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
 				dpll_arg_inc(dpll);
 			}
 
@@ -1731,24 +1732,14 @@ static int cmd_pin_set(struct dpll *dpll)
 
 			/* Parse optional reference-sync state */
 			if (dpll_argc(dpll) > 0 && dpll_argv_match(dpll, "state")) {
+				__u32 state;
+
 				dpll_arg_inc(dpll);
-				if (dpll_argc(dpll) == 0) {
-					pr_err("state requires an argument\n");
+				if (dpll_arg_required(dpll, "state"))
 					return -EINVAL;
-				}
-				if (dpll_argv_match(dpll, "connected")) {
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-							 DPLL_PIN_STATE_CONNECTED);
-				} else if (dpll_argv_match(dpll, "disconnected")) {
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-							 DPLL_PIN_STATE_DISCONNECTED);
-				} else if (dpll_argv_match(dpll, "selectable")) {
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE,
-							 DPLL_PIN_STATE_SELECTABLE);
-				} else {
-					pr_err("invalid state: %s\n", dpll_argv(dpll));
+				if (dpll_parse_state(dpll, &state))
 					return -EINVAL;
-				}
+				mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
 				dpll_arg_inc(dpll);
 			}
 
