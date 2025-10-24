@@ -83,25 +83,8 @@ static bool dpll_no_arg(struct dpll *dpll)
 	return dpll_argc(dpll) == 0;
 }
 
-static void __attribute__((format(printf, 1, 2)))
-pr_err(const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-}
-
-static void __attribute__((format(printf, 1, 2)))
-pr_out(const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vprintf(fmt, ap);
-	va_end(ap);
-}
+#define pr_err(args...) fprintf(stderr, ##args)
+#define pr_out(args...) fprintf(stdout, ##args)
 
 /* Helper to parse pin state argument */
 static int dpll_parse_state(struct dpll *dpll, __u32 *state)
