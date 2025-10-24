@@ -582,10 +582,8 @@ static int cmd_device_set(struct dpll *dpll)
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "id")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("id requires an argument\n");
+			if (dpll_arg_required(dpll, "id"))
 				return -EINVAL;
-			}
 			if (get_u32(&id, dpll_argv(dpll), 0)) {
 				pr_err("invalid id: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -595,10 +593,8 @@ static int cmd_device_set(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "phase-offset-monitor")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("phase-offset-monitor requires an argument\n");
+			if (dpll_arg_required(dpll, "phase-offset-monitor"))
 				return -EINVAL;
-			}
 			if (dpll_argv_match(dpll, "true") || dpll_argv_match(dpll, "1")) {
 				mnl_attr_put_u32(nlh, DPLL_A_PHASE_OFFSET_MONITOR, 1);
 			} else if (dpll_argv_match(dpll, "false") || dpll_argv_match(dpll, "0")) {
@@ -611,11 +607,10 @@ static int cmd_device_set(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "phase-offset-avg-factor")) {
 			__u32 phase_avg_factor;
+
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("phase-offset-avg-factor requires an argument\n");
+			if (dpll_arg_required(dpll, "phase-offset-avg-factor"))
 				return -EINVAL;
-			}
 			if (get_u32(&phase_avg_factor, dpll_argv(dpll), 0)) {
 				pr_err("invalid phase-offset-avg-factor: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -675,19 +670,16 @@ static int cmd_device_id_get(struct dpll *dpll)
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "module-name")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("module-name requires an argument\n");
+			if (dpll_arg_required(dpll, "module-name"))
 				return -EINVAL;
-			}
 			mnl_attr_put_strz(nlh, DPLL_A_MODULE_NAME, dpll_argv(dpll));
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "clock-id")) {
 			__u64 clock_id;
+
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("clock-id requires an argument\n");
+			if (dpll_arg_required(dpll, "clock-id"))
 				return -EINVAL;
-			}
 			if (get_u64(&clock_id, dpll_argv(dpll), 0)) {
 				pr_err("invalid clock-id: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -696,10 +688,8 @@ static int cmd_device_id_get(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "type")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("type requires an argument\n");
+			if (dpll_arg_required(dpll, "type"))
 				return -EINVAL;
-			}
 			if (dpll_argv_match(dpll, "pps")) {
 				mnl_attr_put_u32(nlh, DPLL_A_TYPE, DPLL_TYPE_PPS);
 			} else if (dpll_argv_match(dpll, "eec")) {
@@ -1465,10 +1455,8 @@ static int cmd_pin_show(struct dpll *dpll)
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "id")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("id requires an argument\n");
+			if (dpll_arg_required(dpll, "id"))
 				return -EINVAL;
-			}
 			if (get_u32(&pin_id, dpll_argv(dpll), 0)) {
 				pr_err("invalid pin id: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1477,10 +1465,8 @@ static int cmd_pin_show(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "device")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("device requires an argument\n");
+			if (dpll_arg_required(dpll, "device"))
 				return -EINVAL;
-			}
 			if (get_u32(&device_id, dpll_argv(dpll), 0)) {
 				pr_err("invalid device id: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1514,10 +1500,8 @@ static int cmd_pin_set(struct dpll *dpll)
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "id")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("id requires an argument\n");
+			if (dpll_arg_required(dpll, "id"))
 				return -EINVAL;
-			}
 			if (get_u32(&id, dpll_argv(dpll), 0)) {
 				pr_err("invalid pin id: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1527,11 +1511,10 @@ static int cmd_pin_set(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "frequency")) {
 			__u64 freq;
+
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("frequency requires an argument\n");
+			if (dpll_arg_required(dpll, "frequency"))
 				return -EINVAL;
-			}
 			if (get_u64(&freq, dpll_argv(dpll), 0)) {
 				pr_err("invalid frequency: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1540,11 +1523,10 @@ static int cmd_pin_set(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "prio")) {
 			__u32 prio;
+
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("prio requires an argument\n");
+			if (dpll_arg_required(dpll, "prio"))
 				return -EINVAL;
-			}
 			if (get_u32(&prio, dpll_argv(dpll), 0)) {
 				pr_err("invalid prio: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1575,10 +1557,8 @@ static int cmd_pin_set(struct dpll *dpll)
 			__s32 phase_gran;
 
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("phase-adjust-gran requires an argument\n");
+			if (dpll_arg_required(dpll, "phase-adjust-gran"))
 				return -EINVAL;
-			}
 			if (get_s32(&phase_gran, dpll_argv(dpll), 0)) {
 				pr_err("invalid phase-adjust-gran: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1587,11 +1567,10 @@ static int cmd_pin_set(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "phase-adjust")) {
 			__s32 phase_adjust;
+
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("phase-adjust requires an argument\n");
+			if (dpll_arg_required(dpll, "phase-adjust"))
 				return -EINVAL;
-			}
 			if (get_s32(&phase_adjust, dpll_argv(dpll), 0)) {
 				pr_err("invalid phase-adjust: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1600,11 +1579,10 @@ static int cmd_pin_set(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "esync-frequency")) {
 			__u64 esync_freq;
+
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("esync-frequency requires an argument\n");
+			if (dpll_arg_required(dpll, "esync-frequency"))
 				return -EINVAL;
-			}
 			if (get_u64(&esync_freq, dpll_argv(dpll), 0)) {
 				pr_err("invalid esync-frequency: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1616,10 +1594,8 @@ static int cmd_pin_set(struct dpll *dpll)
 			__u32 parent_id;
 
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("parent-device requires device id\n");
+			if (dpll_arg_required(dpll, "parent-device"))
 				return -EINVAL;
-			}
 
 			/* Parse parent device id */
 			if (get_u32(&parent_id, dpll_argv(dpll), 0)) {
@@ -1647,10 +1623,8 @@ static int cmd_pin_set(struct dpll *dpll)
 				} else if (dpll_argv_match(dpll, "prio")) {
 					__u32 prio;
 					dpll_arg_inc(dpll);
-					if (dpll_argc(dpll) == 0) {
-						pr_err("prio requires an argument\n");
+					if (dpll_arg_required(dpll, "prio"))
 						return -EINVAL;
-					}
 					if (get_u32(&prio, dpll_argv(dpll), 0)) {
 						pr_err("invalid prio: %s\n", dpll_argv(dpll));
 						return -EINVAL;
@@ -1679,10 +1653,8 @@ static int cmd_pin_set(struct dpll *dpll)
 			__u32 parent_id;
 
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("parent-pin requires pin id\n");
+			if (dpll_arg_required(dpll, "parent-pin"))
 				return -EINVAL;
-			}
 
 			/* Parse parent pin id */
 			if (get_u32(&parent_id, dpll_argv(dpll), 0)) {
@@ -1714,10 +1686,8 @@ static int cmd_pin_set(struct dpll *dpll)
 			__u32 ref_pin_id;
 
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("reference-sync requires pin id\n");
+			if (dpll_arg_required(dpll, "reference-sync"))
 				return -EINVAL;
-			}
 
 			/* Parse reference-sync pin id */
 			if (get_u32(&ref_pin_id, dpll_argv(dpll), 0)) {
@@ -1795,19 +1765,15 @@ static int cmd_pin_id_get(struct dpll *dpll)
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "module-name")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("module-name requires an argument\n");
+			if (dpll_arg_required(dpll, "module-name"))
 				return -EINVAL;
-			}
 			mnl_attr_put_strz(nlh, DPLL_A_PIN_MODULE_NAME, dpll_argv(dpll));
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "clock-id")) {
 			__u64 clock_id;
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("clock-id requires an argument\n");
+			if (dpll_arg_required(dpll, "clock-id"))
 				return -EINVAL;
-			}
 			if (get_u64(&clock_id, dpll_argv(dpll), 0)) {
 				pr_err("invalid clock-id: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1816,34 +1782,26 @@ static int cmd_pin_id_get(struct dpll *dpll)
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "board-label")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("board-label requires an argument\n");
+			if (dpll_arg_required(dpll, "board-label"))
 				return -EINVAL;
-			}
 			mnl_attr_put_strz(nlh, DPLL_A_PIN_BOARD_LABEL, dpll_argv(dpll));
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "panel-label")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("panel-label requires an argument\n");
+			if (dpll_arg_required(dpll, "panel-label"))
 				return -EINVAL;
-			}
 			mnl_attr_put_strz(nlh, DPLL_A_PIN_PANEL_LABEL, dpll_argv(dpll));
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "package-label")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("package-label requires an argument\n");
+			if (dpll_arg_required(dpll, "package-label"))
 				return -EINVAL;
-			}
 			mnl_attr_put_strz(nlh, DPLL_A_PIN_PACKAGE_LABEL, dpll_argv(dpll));
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "type")) {
 			dpll_arg_inc(dpll);
-			if (dpll_argc(dpll) == 0) {
-				pr_err("type requires an argument\n");
+			if (dpll_arg_required(dpll, "type"))
 				return -EINVAL;
-			}
 			/* Parse pin type */
 			if (dpll_argv_match(dpll, "mux")) {
 				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE, DPLL_PIN_TYPE_MUX);
