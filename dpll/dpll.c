@@ -508,10 +508,7 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 
 	DPLL_PR_STR(tb, DPLL_A_MODULE_NAME, "module-name");
 
-	if (tb[DPLL_A_MODE])
-		print_string(PRINT_ANY, "mode",
-			     "  mode: %s\n",
-			     dpll_mode_name(mnl_attr_get_u32(tb[DPLL_A_MODE])));
+	DPLL_PR_ENUM_STR(tb, DPLL_A_MODE, "mode", dpll_mode_name);
 
 	if (tb[DPLL_A_CLOCK_ID]) {
 		if (is_json_context())
@@ -523,20 +520,11 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 				    mnl_attr_get_u64(tb[DPLL_A_CLOCK_ID]));
 	}
 
-	if (tb[DPLL_A_TYPE])
-		print_string(PRINT_ANY, "type",
-			     "  type: %s\n",
-			     dpll_type_name(mnl_attr_get_u32(tb[DPLL_A_TYPE])));
+	DPLL_PR_ENUM_STR(tb, DPLL_A_TYPE, "type", dpll_type_name);
 
-	if (tb[DPLL_A_LOCK_STATUS])
-		print_string(PRINT_ANY, "lock-status",
-			     "  lock-status: %s\n",
-			     dpll_lock_status_name(mnl_attr_get_u32(tb[DPLL_A_LOCK_STATUS])));
+	DPLL_PR_ENUM_STR(tb, DPLL_A_LOCK_STATUS, "lock-status", dpll_lock_status_name);
 
-	if (tb[DPLL_A_LOCK_STATUS_ERROR])
-		print_string(PRINT_ANY, "lock-status-error",
-			     "  lock-status-error: %s\n",
-			     dpll_lock_status_error_name(mnl_attr_get_u32(tb[DPLL_A_LOCK_STATUS_ERROR])));
+	DPLL_PR_ENUM_STR(tb, DPLL_A_LOCK_STATUS_ERROR, "lock-status-error", dpll_lock_status_error_name);
 
 	if (tb[DPLL_A_TEMP]) {
 		__s32 temp = mnl_attr_get_u32(tb[DPLL_A_TEMP]);
@@ -899,10 +887,7 @@ struct multi_attr_ctx {
 /* Pin printing from netlink attributes */
 static void dpll_pin_print_attrs(struct nlattr **tb)
 {
-	if (tb[DPLL_A_PIN_ID])
-		print_uint(PRINT_ANY, "id", "pin id %u",
-			   mnl_attr_get_u32(tb[DPLL_A_PIN_ID]));
-	print_string(PRINT_FP, NULL, ":\n", NULL);
+	DPLL_PR_UINT_FMT(tb, DPLL_A_PIN_ID, "id", "pin id %u:\n");
 
 	DPLL_PR_STR(tb, DPLL_A_PIN_MODULE_NAME, "module-name");
 
