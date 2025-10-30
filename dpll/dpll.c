@@ -640,7 +640,6 @@ static int cmd_device_show(struct dpll *dpll)
 		if (dpll_argv_match(dpll, "id")) {
 			char *str;
 
-			dpll_arg_inc(dpll);
 			str = dpll_argv_next(dpll);
 			if (!str) {
 				pr_err("id requires an argument\n");
