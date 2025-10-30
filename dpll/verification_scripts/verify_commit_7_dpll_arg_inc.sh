@@ -75,21 +75,31 @@ fi
 
 echo ""
 
-# Check that macros have EXACTLY TWO dpll_arg_inc inside them (initial + final)
-echo "[5] Checking that macros have TWO dpll_arg_inc calls (self-contained)..."
+# Check that macros use dpll_argv_next() for self-contained argument parsing
+echo "[5] Checking that macros use dpll_argv_next() for self-contained parsing..."
 
-for MACRO in DPLL_PARSE_ATTR_U32 DPLL_PARSE_ATTR_S32 DPLL_PARSE_ATTR_U64 DPLL_PARSE_ATTR_STR DPLL_PARSE_ATTR_ENUM; do
+for MACRO in DPLL_PARSE_ATTR_U32 DPLL_PARSE_ATTR_S32 DPLL_PARSE_ATTR_U64 DPLL_PARSE_ATTR_STR; do
     if grep -q "#define $MACRO" "$DPLL_C"; then
-        # Get macro body until "} while (0)" or next #define
-        INC_COUNT=$(awk "/#define $MACRO/,/} while \(0\)/" "$DPLL_C" | grep -c "dpll_arg_inc" || echo 0)
-        if [ "$INC_COUNT" -eq 2 ]; then
-            echo "    ✓ $MACRO has exactly 2 dpll_arg_inc calls (self-contained)"
+        # Check if macro uses dpll_argv_next
+        if awk "/#define $MACRO/,/} while \(0\)/" "$DPLL_C" | grep -q "dpll_argv_next"; then
+            echo "    ✓ $MACRO uses dpll_argv_next() (self-contained)"
         else
-            echo "    ✗ ERROR: $MACRO has $INC_COUNT dpll_arg_inc calls (expected: 2)"
+            echo "    ✗ ERROR: $MACRO doesn't use dpll_argv_next()"
             ERRORS=$((ERRORS + 1))
         fi
     fi
 done
+
+# DPLL_PARSE_ATTR_ENUM is special - uses dpll_arg_inc because parse_func needs dpll access
+if grep -q "#define DPLL_PARSE_ATTR_ENUM" "$DPLL_C"; then
+    INC_COUNT=$(awk "/#define DPLL_PARSE_ATTR_ENUM/,/} while \(0\)/" "$DPLL_C" | grep -c "dpll_arg_inc" || echo 0)
+    if [ "$INC_COUNT" -eq 2 ]; then
+        echo "    ✓ DPLL_PARSE_ATTR_ENUM uses 2 dpll_arg_inc calls (needs dpll for parse_func)"
+    else
+        echo "    ✗ ERROR: DPLL_PARSE_ATTR_ENUM has $INC_COUNT dpll_arg_inc calls (expected: 2)"
+        ERRORS=$((ERRORS + 1))
+    fi
+fi
 echo ""
 
 # Verify command dispatchers use dpll_argv_match_inc
