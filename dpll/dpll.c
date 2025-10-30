@@ -153,52 +153,56 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
 #define DPLL_PARSE_ATTR_U32(dpll, nlh, arg_name, attr_id) \
 	do { \
 		__u32 __val; \
-		dpll_arg_inc(dpll); \
-		if (dpll_arg_required(dpll, arg_name)) \
+		char *__str = dpll_argv_next(dpll); \
+		if (!__str) { \
+			pr_err("%s requires an argument\n", arg_name); \
 			return -EINVAL; \
-		if (get_u32(&__val, dpll_argv(dpll), 0)) { \
-			pr_err("invalid %s: %s\n", arg_name, dpll_argv(dpll)); \
+		} \
+		if (get_u32(&__val, __str, 0)) { \
+			pr_err("invalid %s: %s\n", arg_name, __str); \
 			return -EINVAL; \
 		} \
 		mnl_attr_put_u32(nlh, attr_id, __val); \
-		dpll_arg_inc(dpll); \
 	} while (0)
 
 #define DPLL_PARSE_ATTR_S32(dpll, nlh, arg_name, attr_id) \
 	do { \
 		__s32 __val; \
-		dpll_arg_inc(dpll); \
-		if (dpll_arg_required(dpll, arg_name)) \
+		char *__str = dpll_argv_next(dpll); \
+		if (!__str) { \
+			pr_err("%s requires an argument\n", arg_name); \
 			return -EINVAL; \
-		if (get_s32(&__val, dpll_argv(dpll), 0)) { \
-			pr_err("invalid %s: %s\n", arg_name, dpll_argv(dpll)); \
+		} \
+		if (get_s32(&__val, __str, 0)) { \
+			pr_err("invalid %s: %s\n", arg_name, __str); \
 			return -EINVAL; \
 		} \
 		mnl_attr_put_u32(nlh, attr_id, __val); \
-		dpll_arg_inc(dpll); \
 	} while (0)
 
 #define DPLL_PARSE_ATTR_U64(dpll, nlh, arg_name, attr_id) \
 	do { \
 		__u64 __val; \
-		dpll_arg_inc(dpll); \
-		if (dpll_arg_required(dpll, arg_name)) \
+		char *__str = dpll_argv_next(dpll); \
+		if (!__str) { \
+			pr_err("%s requires an argument\n", arg_name); \
 			return -EINVAL; \
-		if (get_u64(&__val, dpll_argv(dpll), 0)) { \
-			pr_err("invalid %s: %s\n", arg_name, dpll_argv(dpll)); \
+		} \
+		if (get_u64(&__val, __str, 0)) { \
+			pr_err("invalid %s: %s\n", arg_name, __str); \
 			return -EINVAL; \
 		} \
 		mnl_attr_put_u64(nlh, attr_id, __val); \
-		dpll_arg_inc(dpll); \
 	} while (0)
 
 #define DPLL_PARSE_ATTR_STR(dpll, nlh, arg_name, attr_id) \
 	do { \
-		dpll_arg_inc(dpll); \
-		if (dpll_arg_required(dpll, arg_name)) \
+		char *__str = dpll_argv_next(dpll); \
+		if (!__str) { \
+			pr_err("%s requires an argument\n", arg_name); \
 			return -EINVAL; \
-		mnl_attr_put_strz(nlh, attr_id, dpll_argv(dpll)); \
-		dpll_arg_inc(dpll); \
+		} \
+		mnl_attr_put_strz(nlh, attr_id, __str); \
 	} while (0)
 
 #define DPLL_PARSE_ATTR_ENUM(dpll, nlh, arg_name, attr_id, parse_func) \
