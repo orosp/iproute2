@@ -204,50 +204,51 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
  * These macros combine the common pattern of:
  * if (tb[ATTR]) print_xxx(PRINT_ANY, "name", "format", mnl_attr_get_xxx(tb[ATTR]));
  *
- * Standard versions auto-generate format string: "  name: %d\n"
+ * Generic versions with custom format string (_FMT suffix)
+ * Simple versions auto-generate format string: "  name: %d\n"
  */
-#define DPLL_PR_INT(tb, attr_id, name) \
+
+/* Generic versions with custom format */
+#define DPLL_PR_INT_FMT(tb, attr_id, name, format_str) \
 	do { \
 		if (tb[attr_id]) \
-			print_int(PRINT_ANY, name, "  " name ": %d\n", \
+			print_int(PRINT_ANY, name, format_str, \
 				  mnl_attr_get_u32(tb[attr_id])); \
 	} while (0)
 
-#define DPLL_PR_UINT(tb, attr_id, name) \
-	do { \
-		if (tb[attr_id]) \
-			print_uint(PRINT_ANY, name, "  " name ": %u\n", \
-				   mnl_attr_get_u32(tb[attr_id])); \
-	} while (0)
-
-#define DPLL_PR_U64(tb, attr_id, name) \
-	do { \
-		if (tb[attr_id]) \
-			print_lluint(PRINT_ANY, name, "  " name ": %llu\n", \
-				     mnl_attr_get_u64(tb[attr_id])); \
-	} while (0)
-
-#define DPLL_PR_STR(tb, attr_id, name) \
-	do { \
-		if (tb[attr_id]) \
-			print_string(PRINT_ANY, name, "  " name ": %s\n", \
-				     mnl_attr_get_str(tb[attr_id])); \
-	} while (0)
-
-/* Custom format versions (with explicit format string) */
-#define DPLL_PR_OUT_UINT(tb, attr_id, name, format_str) \
+#define DPLL_PR_UINT_FMT(tb, attr_id, name, format_str) \
 	do { \
 		if (tb[attr_id]) \
 			print_uint(PRINT_ANY, name, format_str, \
 				   mnl_attr_get_u32(tb[attr_id])); \
 	} while (0)
 
-#define DPLL_PR_OUT_U64(tb, attr_id, name, format_str) \
+#define DPLL_PR_U64_FMT(tb, attr_id, name, format_str) \
 	do { \
 		if (tb[attr_id]) \
 			print_lluint(PRINT_ANY, name, format_str, \
 				     mnl_attr_get_u64(tb[attr_id])); \
 	} while (0)
+
+#define DPLL_PR_STR_FMT(tb, attr_id, name, format_str) \
+	do { \
+		if (tb[attr_id]) \
+			print_string(PRINT_ANY, name, format_str, \
+				     mnl_attr_get_str(tb[attr_id])); \
+	} while (0)
+
+/* Simple versions with auto-generated format */
+#define DPLL_PR_INT(tb, attr_id, name) \
+	DPLL_PR_INT_FMT(tb, attr_id, name, "  " name ": %d\n")
+
+#define DPLL_PR_UINT(tb, attr_id, name) \
+	DPLL_PR_UINT_FMT(tb, attr_id, name, "  " name ": %u\n")
+
+#define DPLL_PR_U64(tb, attr_id, name) \
+	DPLL_PR_U64_FMT(tb, attr_id, name, "  " name ": %llu\n")
+
+#define DPLL_PR_STR(tb, attr_id, name) \
+	DPLL_PR_STR_FMT(tb, attr_id, name, "  " name ": %s\n")
 
 static void help(void)
 {
@@ -996,7 +997,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			     (long long)mnl_attr_get_u64(tb[DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET]));
 
 	/* Print esync frequency and related attributes */
-	DPLL_PR_OUT_U64(tb, DPLL_A_PIN_ESYNC_FREQUENCY, "esync_frequency",
+	DPLL_PR_U64_FMT(tb, DPLL_A_PIN_ESYNC_FREQUENCY, "esync_frequency",
 			"  esync-frequency: %llu Hz\n");
 
 	if (tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED]) {
@@ -1067,13 +1068,13 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			if (!is_json_context())
 				pr_out("    ");
 
-			DPLL_PR_OUT_UINT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
+			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
 					 "id %u");
 			if (tb_parent[DPLL_A_PIN_DIRECTION])
 				print_string(PRINT_ANY, "direction",
 					     " direction %s",
 					     dpll_pin_direction_name(mnl_attr_get_u32(tb_parent[DPLL_A_PIN_DIRECTION])));
-			DPLL_PR_OUT_UINT(tb_parent, DPLL_A_PIN_PRIO, "prio",
+			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PRIO, "prio",
 					 " prio %u");
 			if (tb_parent[DPLL_A_PIN_STATE])
 				print_string(PRINT_ANY, "state",
@@ -1113,7 +1114,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			if (!is_json_context())
 				pr_out("    ");
 
-			DPLL_PR_OUT_UINT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
+			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
 					 "id %u");
 			if (tb_parent[DPLL_A_PIN_STATE])
 				print_string(PRINT_ANY, "state",
@@ -1144,7 +1145,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			if (!is_json_context())
 				pr_out("    ");
 
-			DPLL_PR_OUT_UINT(tb_ref, DPLL_A_PIN_ID, "id",
+			DPLL_PR_UINT_FMT(tb_ref, DPLL_A_PIN_ID, "id",
 					 "pin %u");
 			if (tb_ref[DPLL_A_PIN_STATE])
 				print_string(PRINT_ANY, "state",
