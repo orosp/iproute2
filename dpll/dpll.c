@@ -145,6 +145,70 @@ static int dpll_arg_required(struct dpll *dpll, const char *arg_name)
 	return 0;
 }
 
+/* Macros for parsing and setting netlink attributes
+ * These macros handle the complete parsing flow:
+ * 1. Increment from keyword to value (dpll_arg_inc)
+ * 2. Argument presence validation (dpll_arg_required)
+ * 3. String-to-value conversion with error handling
+ * 4. Netlink attribute addition
+ * 5. Increment from value to next keyword (dpll_arg_inc)
+ *
+ * Usage:
+ *   if (dpll_argv_match(dpll, "frequency")) {
+ *       DPLL_PARSE_ATTR_U64(dpll, nlh, "frequency", DPLL_A_PIN_FREQUENCY);
+ *   }
+ */
+#define DPLL_PARSE_ATTR_U32(dpll, nlh, arg_name, attr_id) \
+	do { \
+		__u32 __val; \
+		dpll_arg_inc(dpll); \
+		if (dpll_arg_required(dpll, arg_name)) \
+			return -EINVAL; \
+		if (get_u32(&__val, dpll_argv(dpll), 0)) { \
+			pr_err("invalid %s: %s\n", arg_name, dpll_argv(dpll)); \
+			return -EINVAL; \
+		} \
+		mnl_attr_put_u32(nlh, attr_id, __val); \
+		dpll_arg_inc(dpll); \
+	} while (0)
+
+#define DPLL_PARSE_ATTR_S32(dpll, nlh, arg_name, attr_id) \
+	do { \
+		__s32 __val; \
+		dpll_arg_inc(dpll); \
+		if (dpll_arg_required(dpll, arg_name)) \
+			return -EINVAL; \
+		if (get_s32(&__val, dpll_argv(dpll), 0)) { \
+			pr_err("invalid %s: %s\n", arg_name, dpll_argv(dpll)); \
+			return -EINVAL; \
+		} \
+		mnl_attr_put_u32(nlh, attr_id, __val); \
+		dpll_arg_inc(dpll); \
+	} while (0)
+
+#define DPLL_PARSE_ATTR_U64(dpll, nlh, arg_name, attr_id) \
+	do { \
+		__u64 __val; \
+		dpll_arg_inc(dpll); \
+		if (dpll_arg_required(dpll, arg_name)) \
+			return -EINVAL; \
+		if (get_u64(&__val, dpll_argv(dpll), 0)) { \
+			pr_err("invalid %s: %s\n", arg_name, dpll_argv(dpll)); \
+			return -EINVAL; \
+		} \
+		mnl_attr_put_u64(nlh, attr_id, __val); \
+		dpll_arg_inc(dpll); \
+	} while (0)
+
+#define DPLL_PARSE_ATTR_STR(dpll, nlh, arg_name, attr_id) \
+	do { \
+		dpll_arg_inc(dpll); \
+		if (dpll_arg_required(dpll, arg_name)) \
+			return -EINVAL; \
+		mnl_attr_put_strz(nlh, attr_id, dpll_argv(dpll)); \
+		dpll_arg_inc(dpll); \
+	} while (0)
+
 static void help(void)
 {
 	pr_err("Usage: dpll [ OPTIONS ] OBJECT { COMMAND | help }\n"
@@ -606,17 +670,8 @@ static int cmd_device_set(struct dpll *dpll)
 			}
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "phase-offset-avg-factor")) {
-			__u32 phase_avg_factor;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "phase-offset-avg-factor"))
-				return -EINVAL;
-			if (get_u32(&phase_avg_factor, dpll_argv(dpll), 0)) {
-				pr_err("invalid phase-offset-avg-factor: %s\n", dpll_argv(dpll));
-				return -EINVAL;
-			}
-			mnl_attr_put_u32(nlh, DPLL_A_PHASE_OFFSET_AVG_FACTOR, phase_avg_factor);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_U32(dpll, nlh, "phase-offset-avg-factor",
+					    DPLL_A_PHASE_OFFSET_AVG_FACTOR);
 		} else {
 			pr_err("unknown option: %s\n", dpll_argv(dpll));
 			return -EINVAL;
@@ -669,23 +724,9 @@ static int cmd_device_id_get(struct dpll *dpll)
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "module-name")) {
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "module-name"))
-				return -EINVAL;
-			mnl_attr_put_strz(nlh, DPLL_A_MODULE_NAME, dpll_argv(dpll));
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "module-name", DPLL_A_MODULE_NAME);
 		} else if (dpll_argv_match(dpll, "clock-id")) {
-			__u64 clock_id;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "clock-id"))
-				return -EINVAL;
-			if (get_u64(&clock_id, dpll_argv(dpll), 0)) {
-				pr_err("invalid clock-id: %s\n", dpll_argv(dpll));
-				return -EINVAL;
-			}
-			mnl_attr_put_u64(nlh, DPLL_A_CLOCK_ID, clock_id);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_U64(dpll, nlh, "clock-id", DPLL_A_CLOCK_ID);
 		} else if (dpll_argv_match(dpll, "type")) {
 			dpll_arg_inc(dpll);
 			if (dpll_arg_required(dpll, "type"))
@@ -1510,29 +1551,9 @@ static int cmd_pin_set(struct dpll *dpll)
 			has_id = true;
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "frequency")) {
-			__u64 freq;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "frequency"))
-				return -EINVAL;
-			if (get_u64(&freq, dpll_argv(dpll), 0)) {
-				pr_err("invalid frequency: %s\n", dpll_argv(dpll));
-				return -EINVAL;
-			}
-			mnl_attr_put_u64(nlh, DPLL_A_PIN_FREQUENCY, freq);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_U64(dpll, nlh, "frequency", DPLL_A_PIN_FREQUENCY);
 		} else if (dpll_argv_match(dpll, "prio")) {
-			__u32 prio;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "prio"))
-				return -EINVAL;
-			if (get_u32(&prio, dpll_argv(dpll), 0)) {
-				pr_err("invalid prio: %s\n", dpll_argv(dpll));
-				return -EINVAL;
-			}
-			mnl_attr_put_u32(nlh, DPLL_A_PIN_PRIO, prio);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_U32(dpll, nlh, "prio", DPLL_A_PIN_PRIO);
 		} else if (dpll_argv_match(dpll, "direction")) {
 			__u32 direction;
 
@@ -1554,41 +1575,12 @@ static int cmd_pin_set(struct dpll *dpll)
 			mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
 			dpll_arg_inc(dpll);
 		} else if (dpll_argv_match(dpll, "phase-adjust-gran")) {
-			__s32 phase_gran;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "phase-adjust-gran"))
-				return -EINVAL;
-			if (get_s32(&phase_gran, dpll_argv(dpll), 0)) {
-				pr_err("invalid phase-adjust-gran: %s\n", dpll_argv(dpll));
-				return -EINVAL;
-			}
-			mnl_attr_put_u32(nlh, DPLL_A_PIN_PHASE_ADJUST_GRAN, phase_gran);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_S32(dpll, nlh, "phase-adjust-gran",
+					    DPLL_A_PIN_PHASE_ADJUST_GRAN);
 		} else if (dpll_argv_match(dpll, "phase-adjust")) {
-			__s32 phase_adjust;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "phase-adjust"))
-				return -EINVAL;
-			if (get_s32(&phase_adjust, dpll_argv(dpll), 0)) {
-				pr_err("invalid phase-adjust: %s\n", dpll_argv(dpll));
-				return -EINVAL;
-			}
-			mnl_attr_put_u32(nlh, DPLL_A_PIN_PHASE_ADJUST, phase_adjust);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_S32(dpll, nlh, "phase-adjust", DPLL_A_PIN_PHASE_ADJUST);
 		} else if (dpll_argv_match(dpll, "esync-frequency")) {
-			__u64 esync_freq;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "esync-frequency"))
-				return -EINVAL;
-			if (get_u64(&esync_freq, dpll_argv(dpll), 0)) {
-				pr_err("invalid esync-frequency: %s\n", dpll_argv(dpll));
-				return -EINVAL;
-			}
-			mnl_attr_put_u64(nlh, DPLL_A_PIN_ESYNC_FREQUENCY, esync_freq);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_U64(dpll, nlh, "esync-frequency", DPLL_A_PIN_ESYNC_FREQUENCY);
 		} else if (dpll_argv_match(dpll, "parent-device")) {
 			struct nlattr *nest;
 			__u32 parent_id;
@@ -1621,16 +1613,7 @@ static int cmd_pin_set(struct dpll *dpll)
 					mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION, direction);
 					dpll_arg_inc(dpll);
 				} else if (dpll_argv_match(dpll, "prio")) {
-					__u32 prio;
-					dpll_arg_inc(dpll);
-					if (dpll_arg_required(dpll, "prio"))
-						return -EINVAL;
-					if (get_u32(&prio, dpll_argv(dpll), 0)) {
-						pr_err("invalid prio: %s\n", dpll_argv(dpll));
-						return -EINVAL;
-					}
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_PRIO, prio);
-					dpll_arg_inc(dpll);
+					DPLL_PARSE_ATTR_U32(dpll, nlh, "prio", DPLL_A_PIN_PRIO);
 				} else if (dpll_argv_match(dpll, "state")) {
 					__u32 state;
 
@@ -1764,40 +1747,15 @@ static int cmd_pin_id_get(struct dpll *dpll)
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "module-name")) {
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "module-name"))
-				return -EINVAL;
-			mnl_attr_put_strz(nlh, DPLL_A_PIN_MODULE_NAME, dpll_argv(dpll));
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "module-name", DPLL_A_PIN_MODULE_NAME);
 		} else if (dpll_argv_match(dpll, "clock-id")) {
-			__u64 clock_id;
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "clock-id"))
-				return -EINVAL;
-			if (get_u64(&clock_id, dpll_argv(dpll), 0)) {
-				pr_err("invalid clock-id: %s\n", dpll_argv(dpll));
-				return -EINVAL;
-			}
-			mnl_attr_put_u64(nlh, DPLL_A_PIN_CLOCK_ID, clock_id);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_U64(dpll, nlh, "clock-id", DPLL_A_PIN_CLOCK_ID);
 		} else if (dpll_argv_match(dpll, "board-label")) {
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "board-label"))
-				return -EINVAL;
-			mnl_attr_put_strz(nlh, DPLL_A_PIN_BOARD_LABEL, dpll_argv(dpll));
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "board-label", DPLL_A_PIN_BOARD_LABEL);
 		} else if (dpll_argv_match(dpll, "panel-label")) {
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "panel-label"))
-				return -EINVAL;
-			mnl_attr_put_strz(nlh, DPLL_A_PIN_PANEL_LABEL, dpll_argv(dpll));
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "panel-label", DPLL_A_PIN_PANEL_LABEL);
 		} else if (dpll_argv_match(dpll, "package-label")) {
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "package-label"))
-				return -EINVAL;
-			mnl_attr_put_strz(nlh, DPLL_A_PIN_PACKAGE_LABEL, dpll_argv(dpll));
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "package-label", DPLL_A_PIN_PACKAGE_LABEL);
 		} else if (dpll_argv_match(dpll, "type")) {
 			dpll_arg_inc(dpll);
 			if (dpll_arg_required(dpll, "type"))
