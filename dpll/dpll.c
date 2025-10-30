@@ -917,10 +917,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	DPLL_PR_ENUM_STR(tb, DPLL_A_PIN_TYPE, "type", dpll_pin_type_name);
 
-	if (tb[DPLL_A_PIN_FREQUENCY])
-		print_lluint(PRINT_ANY, "frequency",
-			     "  frequency: %llu Hz\n",
-			     mnl_attr_get_u64(tb[DPLL_A_PIN_FREQUENCY]));
+	DPLL_PR_U64_FMT(tb, DPLL_A_PIN_FREQUENCY, "frequency",
+			"  frequency: %llu Hz\n");
 
 	/* Print frequency-supported ranges */
 	if (tb[DPLL_A_PIN_FREQUENCY_SUPPORTED]) {
@@ -1047,10 +1045,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		close_json_array(PRINT_JSON, NULL);
 	}
 
-	if (tb[DPLL_A_PIN_ESYNC_PULSE])
-		print_uint(PRINT_ANY, "esync_pulse",
-			   "  esync-pulse: %u\n",
-			   mnl_attr_get_u32(tb[DPLL_A_PIN_ESYNC_PULSE]));
+	DPLL_PR_UINT_FMT(tb, DPLL_A_PIN_ESYNC_PULSE, "esync_pulse",
+			 "  esync-pulse: %u\n");
 
 	/* Print parent-device relationships */
 	if (tb[DPLL_A_PIN_PARENT_DEVICE]) {
