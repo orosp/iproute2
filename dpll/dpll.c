@@ -200,6 +200,55 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
 		dpll_arg_inc(dpll); \
 	} while (0)
 
+/* Macros for printing netlink attributes
+ * These macros combine the common pattern of:
+ * if (tb[ATTR]) print_xxx(PRINT_ANY, "name", "format", mnl_attr_get_xxx(tb[ATTR]));
+ *
+ * Standard versions auto-generate format string: "  name: %d\n"
+ */
+#define DPLL_PR_INT(tb, attr_id, name) \
+	do { \
+		if (tb[attr_id]) \
+			print_int(PRINT_ANY, name, "  " name ": %d\n", \
+				  mnl_attr_get_u32(tb[attr_id])); \
+	} while (0)
+
+#define DPLL_PR_UINT(tb, attr_id, name) \
+	do { \
+		if (tb[attr_id]) \
+			print_uint(PRINT_ANY, name, "  " name ": %u\n", \
+				   mnl_attr_get_u32(tb[attr_id])); \
+	} while (0)
+
+#define DPLL_PR_U64(tb, attr_id, name) \
+	do { \
+		if (tb[attr_id]) \
+			print_lluint(PRINT_ANY, name, "  " name ": %llu\n", \
+				     mnl_attr_get_u64(tb[attr_id])); \
+	} while (0)
+
+#define DPLL_PR_STR(tb, attr_id, name) \
+	do { \
+		if (tb[attr_id]) \
+			print_string(PRINT_ANY, name, "  " name ": %s\n", \
+				     mnl_attr_get_str(tb[attr_id])); \
+	} while (0)
+
+/* Custom format versions (with explicit format string) */
+#define DPLL_PR_OUT_UINT(tb, attr_id, name, format_str) \
+	do { \
+		if (tb[attr_id]) \
+			print_uint(PRINT_ANY, name, format_str, \
+				   mnl_attr_get_u32(tb[attr_id])); \
+	} while (0)
+
+#define DPLL_PR_OUT_U64(tb, attr_id, name, format_str) \
+	do { \
+		if (tb[attr_id]) \
+			print_lluint(PRINT_ANY, name, format_str, \
+				     mnl_attr_get_u64(tb[attr_id])); \
+	} while (0)
+
 static void help(void)
 {
 	pr_err("Usage: dpll [ OPTIONS ] OBJECT { COMMAND | help }\n"
@@ -445,10 +494,7 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 			   mnl_attr_get_u32(tb[DPLL_A_ID]));
 	print_string(PRINT_FP, NULL, ":\n", NULL);
 
-	if (tb[DPLL_A_MODULE_NAME])
-		print_string(PRINT_ANY, "module-name",
-			     "  module-name: %s\n",
-			     mnl_attr_get_str(tb[DPLL_A_MODULE_NAME]));
+	DPLL_PR_STR(tb, DPLL_A_MODULE_NAME, "module-name");
 
 	if (tb[DPLL_A_MODE])
 		print_string(PRINT_ANY, "mode",
@@ -512,10 +558,7 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 			     value ? "enabled" : "disabled");
 	}
 
-	if (tb[DPLL_A_PHASE_OFFSET_AVG_FACTOR])
-		print_uint(PRINT_ANY, "phase-offset-avg-factor",
-			   "  phase-offset-avg-factor: %u\n",
-			   mnl_attr_get_u32(tb[DPLL_A_PHASE_OFFSET_AVG_FACTOR]));
+	DPLL_PR_UINT(tb, DPLL_A_PHASE_OFFSET_AVG_FACTOR, "phase-offset-avg-factor");
 }
 
 /* Callback for device get (single) */
@@ -850,10 +893,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			   mnl_attr_get_u32(tb[DPLL_A_PIN_ID]));
 	print_string(PRINT_FP, NULL, ":\n", NULL);
 
-	if (tb[DPLL_A_PIN_MODULE_NAME])
-		print_string(PRINT_ANY, "module-name",
-			     "  module-name: %s\n",
-			     mnl_attr_get_str(tb[DPLL_A_PIN_MODULE_NAME]));
+	DPLL_PR_STR(tb, DPLL_A_PIN_MODULE_NAME, "module-name");
 
 	if (tb[DPLL_A_PIN_CLOCK_ID]) {
 		if (is_json_context())
@@ -865,20 +905,9 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 				    mnl_attr_get_u64(tb[DPLL_A_PIN_CLOCK_ID]));
 	}
 
-	if (tb[DPLL_A_PIN_BOARD_LABEL])
-		print_string(PRINT_ANY, "board-label",
-			     "  board-label: %s\n",
-			     mnl_attr_get_str(tb[DPLL_A_PIN_BOARD_LABEL]));
-
-	if (tb[DPLL_A_PIN_PANEL_LABEL])
-		print_string(PRINT_ANY, "panel-label",
-			     "  panel-label: %s\n",
-			     mnl_attr_get_str(tb[DPLL_A_PIN_PANEL_LABEL]));
-
-	if (tb[DPLL_A_PIN_PACKAGE_LABEL])
-		print_string(PRINT_ANY, "package-label",
-			     "  package-label: %s\n",
-			     mnl_attr_get_str(tb[DPLL_A_PIN_PACKAGE_LABEL]));
+	DPLL_PR_STR(tb, DPLL_A_PIN_BOARD_LABEL, "board-label");
+	DPLL_PR_STR(tb, DPLL_A_PIN_PANEL_LABEL, "panel-label");
+	DPLL_PR_STR(tb, DPLL_A_PIN_PACKAGE_LABEL, "package-label");
 
 	if (tb[DPLL_A_PIN_TYPE])
 		print_string(PRINT_ANY, "type",
@@ -956,25 +985,10 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	}
 
 	/* Print phase adjust range, granularity and current value */
-	if (tb[DPLL_A_PIN_PHASE_ADJUST_MIN])
-		print_int(PRINT_ANY, "phase-adjust-min",
-			  "  phase-adjust-min: %d\n",
-			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST_MIN]));
-
-	if (tb[DPLL_A_PIN_PHASE_ADJUST_MAX])
-		print_int(PRINT_ANY, "phase-adjust-max",
-			  "  phase-adjust-max: %d\n",
-			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST_MAX]));
-
-	if (tb[DPLL_A_PIN_PHASE_ADJUST_GRAN])
-		print_int(PRINT_ANY, "phase-adjust-gran",
-			  "  phase-adjust-gran: %d\n",
-			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST_GRAN]));
-
-	if (tb[DPLL_A_PIN_PHASE_ADJUST])
-		print_int(PRINT_ANY, "phase-adjust",
-			  "  phase-adjust: %d\n",
-			  mnl_attr_get_u32(tb[DPLL_A_PIN_PHASE_ADJUST]));
+	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST_MIN, "phase-adjust-min");
+	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST_MAX, "phase-adjust-max");
+	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST_GRAN, "phase-adjust-gran");
+	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST, "phase-adjust");
 
 	/* Print fractional frequency offset */
 	if (tb[DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET])
@@ -983,10 +997,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			     (long long)mnl_attr_get_u64(tb[DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET]));
 
 	/* Print esync frequency and related attributes */
-	if (tb[DPLL_A_PIN_ESYNC_FREQUENCY])
-		print_lluint(PRINT_ANY, "esync_frequency",
-			     "  esync-frequency: %llu Hz\n",
-			     mnl_attr_get_u64(tb[DPLL_A_PIN_ESYNC_FREQUENCY]));
+	DPLL_PR_OUT_U64(tb, DPLL_A_PIN_ESYNC_FREQUENCY, "esync_frequency",
+			"  esync-frequency: %llu Hz\n");
 
 	if (tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED]) {
 		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED];
@@ -1056,18 +1068,14 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			if (!is_json_context())
 				pr_out("    ");
 
-			if (tb_parent[DPLL_A_PIN_PARENT_ID])
-				print_uint(PRINT_ANY, "parent-id",
-					   "id %u",
-					   mnl_attr_get_u32(tb_parent[DPLL_A_PIN_PARENT_ID]));
+			DPLL_PR_OUT_UINT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
+					 "id %u");
 			if (tb_parent[DPLL_A_PIN_DIRECTION])
 				print_string(PRINT_ANY, "direction",
 					     " direction %s",
 					     dpll_pin_direction_name(mnl_attr_get_u32(tb_parent[DPLL_A_PIN_DIRECTION])));
-			if (tb_parent[DPLL_A_PIN_PRIO])
-				print_uint(PRINT_ANY, "prio",
-					   " prio %u",
-					   mnl_attr_get_u32(tb_parent[DPLL_A_PIN_PRIO]));
+			DPLL_PR_OUT_UINT(tb_parent, DPLL_A_PIN_PRIO, "prio",
+					 " prio %u");
 			if (tb_parent[DPLL_A_PIN_STATE])
 				print_string(PRINT_ANY, "state",
 					     " state %s",
@@ -1106,10 +1114,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			if (!is_json_context())
 				pr_out("    ");
 
-			if (tb_parent[DPLL_A_PIN_PARENT_ID])
-				print_uint(PRINT_ANY, "parent-id",
-					   "id %u",
-					   mnl_attr_get_u32(tb_parent[DPLL_A_PIN_PARENT_ID]));
+			DPLL_PR_OUT_UINT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
+					 "id %u");
 			if (tb_parent[DPLL_A_PIN_STATE])
 				print_string(PRINT_ANY, "state",
 					     " state %s",
@@ -1139,10 +1145,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			if (!is_json_context())
 				pr_out("    ");
 
-			if (tb_ref[DPLL_A_PIN_ID])
-				print_uint(PRINT_ANY, "id",
-					   "pin %u",
-					   mnl_attr_get_u32(tb_ref[DPLL_A_PIN_ID]));
+			DPLL_PR_OUT_UINT(tb_ref, DPLL_A_PIN_ID, "id",
+					 "pin %u");
 			if (tb_ref[DPLL_A_PIN_STATE])
 				print_string(PRINT_ANY, "state",
 					     " state %s",
