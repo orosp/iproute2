@@ -200,6 +200,18 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
 		dpll_arg_inc(dpll); \
 	} while (0)
 
+#define DPLL_PARSE_ATTR_ENUM(dpll, nlh, arg_name, attr_id, parse_func) \
+	do { \
+		__u32 __val; \
+		dpll_arg_inc(dpll); \
+		if (dpll_arg_required(dpll, arg_name)) \
+			return -EINVAL; \
+		if (parse_func(dpll, &__val)) \
+			return -EINVAL; \
+		mnl_attr_put_u32(nlh, attr_id, __val); \
+		dpll_arg_inc(dpll); \
+	} while (0)
+
 /* Macros for printing netlink attributes
  * These macros combine the common pattern of:
  * if (tb[ATTR]) print_xxx(PRINT_ANY, "name", "format", mnl_attr_get_xxx(tb[ATTR]));
@@ -1534,25 +1546,11 @@ static int cmd_pin_set(struct dpll *dpll)
 		} else if (dpll_argv_match(dpll, "prio")) {
 			DPLL_PARSE_ATTR_U32(dpll, nlh, "prio", DPLL_A_PIN_PRIO);
 		} else if (dpll_argv_match(dpll, "direction")) {
-			__u32 direction;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "direction"))
-				return -EINVAL;
-			if (dpll_parse_direction(dpll, &direction))
-				return -EINVAL;
-			mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION, direction);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_ENUM(dpll, nlh, "direction", DPLL_A_PIN_DIRECTION,
+					     dpll_parse_direction);
 		} else if (dpll_argv_match(dpll, "state")) {
-			__u32 state;
-
-			dpll_arg_inc(dpll);
-			if (dpll_arg_required(dpll, "state"))
-				return -EINVAL;
-			if (dpll_parse_state(dpll, &state))
-				return -EINVAL;
-			mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
-			dpll_arg_inc(dpll);
+			DPLL_PARSE_ATTR_ENUM(dpll, nlh, "state", DPLL_A_PIN_STATE,
+					     dpll_parse_state);
 		} else if (dpll_argv_match(dpll, "phase-adjust-gran")) {
 			DPLL_PARSE_ATTR_S32(dpll, nlh, "phase-adjust-gran",
 					    DPLL_A_PIN_PHASE_ADJUST_GRAN);
@@ -1582,27 +1580,15 @@ static int cmd_pin_set(struct dpll *dpll)
 			/* Parse optional parent-device attributes */
 			while (dpll_argc(dpll) > 0) {
 				if (dpll_argv_match(dpll, "direction")) {
-					__u32 direction;
-
-					dpll_arg_inc(dpll);
-					if (dpll_arg_required(dpll, "direction"))
-						return -EINVAL;
-					if (dpll_parse_direction(dpll, &direction))
-						return -EINVAL;
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_DIRECTION, direction);
-					dpll_arg_inc(dpll);
+					DPLL_PARSE_ATTR_ENUM(dpll, nlh, "direction",
+							     DPLL_A_PIN_DIRECTION,
+							     dpll_parse_direction);
 				} else if (dpll_argv_match(dpll, "prio")) {
 					DPLL_PARSE_ATTR_U32(dpll, nlh, "prio", DPLL_A_PIN_PRIO);
 				} else if (dpll_argv_match(dpll, "state")) {
-					__u32 state;
-
-					dpll_arg_inc(dpll);
-					if (dpll_arg_required(dpll, "state"))
-						return -EINVAL;
-					if (dpll_parse_state(dpll, &state))
-						return -EINVAL;
-					mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
-					dpll_arg_inc(dpll);
+					DPLL_PARSE_ATTR_ENUM(dpll, nlh, "state",
+							     DPLL_A_PIN_STATE,
+							     dpll_parse_state);
 				} else {
 					/* Not a parent-device attribute, break to parse next option */
 					break;
@@ -1631,15 +1617,9 @@ static int cmd_pin_set(struct dpll *dpll)
 
 			/* Parse optional parent-pin state */
 			if (dpll_argc(dpll) > 0 && dpll_argv_match(dpll, "state")) {
-				__u32 state;
-
-				dpll_arg_inc(dpll);
-				if (dpll_arg_required(dpll, "state"))
-					return -EINVAL;
-				if (dpll_parse_state(dpll, &state))
-					return -EINVAL;
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
-				dpll_arg_inc(dpll);
+				DPLL_PARSE_ATTR_ENUM(dpll, nlh, "state",
+						     DPLL_A_PIN_STATE,
+						     dpll_parse_state);
 			}
 
 			mnl_attr_nest_end(nlh, nest);
@@ -1664,15 +1644,9 @@ static int cmd_pin_set(struct dpll *dpll)
 
 			/* Parse optional reference-sync state */
 			if (dpll_argc(dpll) > 0 && dpll_argv_match(dpll, "state")) {
-				__u32 state;
-
-				dpll_arg_inc(dpll);
-				if (dpll_arg_required(dpll, "state"))
-					return -EINVAL;
-				if (dpll_parse_state(dpll, &state))
-					return -EINVAL;
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_STATE, state);
-				dpll_arg_inc(dpll);
+				DPLL_PARSE_ATTR_ENUM(dpll, nlh, "state",
+						     DPLL_A_PIN_STATE,
+						     dpll_parse_state);
 			}
 
 			mnl_attr_nest_end(nlh, nest);
