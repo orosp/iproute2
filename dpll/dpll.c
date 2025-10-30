@@ -62,11 +62,12 @@ static char *dpll_argv_next(struct dpll *dpll)
 {
 	char *ret;
 
+	dpll_arg_inc(dpll);  /* Skip keyword */
 	if (dpll_argc(dpll) == 0)
 		return NULL;
 
-	ret = *dpll->argv;
-	dpll_arg_inc(dpll);
+	ret = *dpll->argv;   /* Get value */
+	dpll_arg_inc(dpll);  /* Skip value */
 	return ret;
 }
 
