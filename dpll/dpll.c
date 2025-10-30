@@ -250,6 +250,14 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
 #define DPLL_PR_STR(tb, attr_id, name) \
 	DPLL_PR_STR_FMT(tb, attr_id, name, "  " name ": %s\n")
 
+/* Macro for printing enum values converted to strings via name function */
+#define DPLL_PR_ENUM_STR(tb, attr_id, name, format_str, name_func) \
+	do { \
+		if (tb[attr_id]) \
+			print_string(PRINT_ANY, name, format_str, \
+				     name_func(mnl_attr_get_u32(tb[attr_id]))); \
+	} while (0)
+
 static void help(void)
 {
 	pr_err("Usage: dpll [ OPTIONS ] OBJECT { COMMAND | help }\n"
@@ -909,10 +917,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	DPLL_PR_STR(tb, DPLL_A_PIN_PANEL_LABEL, "panel-label");
 	DPLL_PR_STR(tb, DPLL_A_PIN_PACKAGE_LABEL, "package-label");
 
-	if (tb[DPLL_A_PIN_TYPE])
-		print_string(PRINT_ANY, "type",
-			     "  type: %s\n",
-			     dpll_pin_type_name(mnl_attr_get_u32(tb[DPLL_A_PIN_TYPE])));
+	DPLL_PR_ENUM_STR(tb, DPLL_A_PIN_TYPE, "type",
+			 "  type: %s\n", dpll_pin_type_name);
 
 	if (tb[DPLL_A_PIN_FREQUENCY])
 		print_lluint(PRINT_ANY, "frequency",
@@ -1070,16 +1076,12 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
 					 "id %u");
-			if (tb_parent[DPLL_A_PIN_DIRECTION])
-				print_string(PRINT_ANY, "direction",
-					     " direction %s",
-					     dpll_pin_direction_name(mnl_attr_get_u32(tb_parent[DPLL_A_PIN_DIRECTION])));
+			DPLL_PR_ENUM_STR(tb_parent, DPLL_A_PIN_DIRECTION, "direction",
+					 " direction %s", dpll_pin_direction_name);
 			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PRIO, "prio",
 					 " prio %u");
-			if (tb_parent[DPLL_A_PIN_STATE])
-				print_string(PRINT_ANY, "state",
-					     " state %s",
-					     dpll_pin_state_name(mnl_attr_get_u32(tb_parent[DPLL_A_PIN_STATE])));
+			DPLL_PR_ENUM_STR(tb_parent, DPLL_A_PIN_STATE, "state",
+					 " state %s", dpll_pin_state_name);
 			if (tb_parent[DPLL_A_PIN_PHASE_OFFSET]) {
 				struct nlattr *attr = tb_parent[DPLL_A_PIN_PHASE_OFFSET];
 				__s64 phase_offset;
@@ -1116,10 +1118,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
 					 "id %u");
-			if (tb_parent[DPLL_A_PIN_STATE])
-				print_string(PRINT_ANY, "state",
-					     " state %s",
-					     dpll_pin_state_name(mnl_attr_get_u32(tb_parent[DPLL_A_PIN_STATE])));
+			DPLL_PR_ENUM_STR(tb_parent, DPLL_A_PIN_STATE, "state",
+					 " state %s", dpll_pin_state_name);
 
 			if (!is_json_context())
 				pr_out("\n");
@@ -1147,10 +1147,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 			DPLL_PR_UINT_FMT(tb_ref, DPLL_A_PIN_ID, "id",
 					 "pin %u");
-			if (tb_ref[DPLL_A_PIN_STATE])
-				print_string(PRINT_ANY, "state",
-					     " state %s",
-					     dpll_pin_state_name(mnl_attr_get_u32(tb_ref[DPLL_A_PIN_STATE])));
+			DPLL_PR_ENUM_STR(tb_ref, DPLL_A_PIN_STATE, "state",
+					 " state %s", dpll_pin_state_name);
 
 			if (!is_json_context())
 				pr_out("\n");
