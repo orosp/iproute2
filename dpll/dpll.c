@@ -127,6 +127,15 @@ static int dpll_arg_required(struct dpll *dpll, const char *arg_name)
 	return 0;
 }
 
+/* Helper to match argument and increment pointer if matched */
+static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
+{
+	if (!dpll_argv_match(dpll, pattern))
+		return false;
+	dpll_arg_inc(dpll);
+	return true;
+}
+
 /* Macros for parsing and setting netlink attributes
  * These macros handle the complete parsing flow:
  * 1. Increment from keyword to value (dpll_arg_inc)
@@ -211,14 +220,11 @@ static int dpll_cmd(struct dpll *dpll, int argc, char **argv)
 	if (dpll_argv_match(dpll, "help") || dpll_no_arg(dpll)) {
 		help();
 		return 0;
-	} else if (dpll_argv_match(dpll, "device")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "device")) {
 		return cmd_device(dpll);
-	} else if (dpll_argv_match(dpll, "pin")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "pin")) {
 		return cmd_pin(dpll);
-	} else if (dpll_argv_match(dpll, "monitor")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "monitor")) {
 		return cmd_monitor(dpll);
 	}
 	pr_err("Object \"%s\" not found\n", dpll_argv(dpll));
@@ -742,14 +748,11 @@ static int cmd_device(struct dpll *dpll)
 	if (dpll_argv_match(dpll, "help") || dpll_no_arg(dpll)) {
 		cmd_device_help();
 		return 0;
-	} else if (dpll_argv_match(dpll, "show")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "show")) {
 		return cmd_device_show(dpll);
-	} else if (dpll_argv_match(dpll, "set")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "set")) {
 		return cmd_device_set(dpll);
-	} else if (dpll_argv_match(dpll, "id-get")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "id-get")) {
 		return cmd_device_id_get(dpll);
 	}
 
@@ -1778,14 +1781,11 @@ static int cmd_pin(struct dpll *dpll)
 	if (dpll_argv_match(dpll, "help") || dpll_no_arg(dpll)) {
 		cmd_pin_help();
 		return 0;
-	} else if (dpll_argv_match(dpll, "show")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "show")) {
 		return cmd_pin_show(dpll);
-	} else if (dpll_argv_match(dpll, "set")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "set")) {
 		return cmd_pin_set(dpll);
-	} else if (dpll_argv_match(dpll, "id-get")) {
-		dpll_arg_inc(dpll);
+	} else if (dpll_argv_match_inc(dpll, "id-get")) {
 		return cmd_pin_id_get(dpll);
 	}
 
