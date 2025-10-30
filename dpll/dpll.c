@@ -1804,6 +1804,7 @@ static int cmd_monitor_cb(const struct nlmsghdr *nlh, void *data)
 		struct multi_attr_collector collector = {0};
 		struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 		int count;
+		int ret = MNL_CB_OK;
 
 		/* Pass 1: Count multi-attr occurrences and allocate */
 		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_DEVICE);
@@ -1875,23 +1876,23 @@ static int cmd_monitor_cb(const struct nlmsghdr *nlh, void *data)
 
 		pr_out("[%s] ", cmd_name);
 		dpll_pin_print_attrs(tb);
-
-		/* Cleanup */
-		multi_attr_ctx_free(&parent_dev_ctx);
-		multi_attr_ctx_free(&parent_pin_ctx);
-		multi_attr_ctx_free(&ref_sync_ctx);
-		multi_attr_ctx_free(&freq_supp_ctx);
-		multi_attr_ctx_free(&esync_freq_supp_ctx);
-		break;
+		goto pin_ntf_cleanup;
 
 pin_ntf_err:
 		pr_err("Failed to allocate memory for multi-attr processing\n");
+		ret = MNL_CB_ERROR;
+
+pin_ntf_cleanup:
+		/* Free allocated memory */
 		multi_attr_ctx_free(&parent_dev_ctx);
 		multi_attr_ctx_free(&parent_pin_ctx);
 		multi_attr_ctx_free(&ref_sync_ctx);
 		multi_attr_ctx_free(&freq_supp_ctx);
 		multi_attr_ctx_free(&esync_freq_supp_ctx);
-		return MNL_CB_ERROR;
+
+		if (ret == MNL_CB_ERROR)
+			return ret;
+		break;
 	}
 	default:
 		pr_err("Unknown notification command: %d\n", genl->cmd);
