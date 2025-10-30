@@ -504,10 +504,7 @@ static int attr_pin_cb(const struct nlattr *attr, void *data)
 /* Device printing from netlink attributes */
 static void dpll_device_print_attrs(struct nlattr **tb)
 {
-	if (tb[DPLL_A_ID])
-		print_uint(PRINT_ANY, "id", "device id %u",
-			   mnl_attr_get_u32(tb[DPLL_A_ID]));
-	print_string(PRINT_FP, NULL, ":\n", NULL);
+	DPLL_PR_UINT_FMT(tb, DPLL_A_ID, "id", "device id %u:\n");
 
 	DPLL_PR_STR(tb, DPLL_A_MODULE_NAME, "module-name");
 
