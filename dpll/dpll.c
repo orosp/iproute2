@@ -150,18 +150,26 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
  *       DPLL_PARSE_ATTR_U64(dpll, nlh, "frequency", DPLL_A_PIN_FREQUENCY);
  *   }
  */
-#define DPLL_PARSE_ATTR_U32(dpll, nlh, arg_name, attr_id) \
+
+/* Parse U32 argument into a variable */
+#define DPLL_PARSE_U32(dpll, arg_name, var_ptr) \
 	do { \
-		__u32 __val; \
 		char *__str = dpll_argv_next(dpll); \
 		if (!__str) { \
 			pr_err("%s requires an argument\n", arg_name); \
 			return -EINVAL; \
 		} \
-		if (get_u32(&__val, __str, 0)) { \
+		if (get_u32(var_ptr, __str, 0)) { \
 			pr_err("invalid %s: %s\n", arg_name, __str); \
 			return -EINVAL; \
 		} \
+	} while (0)
+
+/* Parse U32 argument and add to netlink message */
+#define DPLL_PARSE_ATTR_U32(dpll, nlh, arg_name, attr_id) \
+	do { \
+		__u32 __val; \
+		DPLL_PARSE_U32(dpll, arg_name, &__val); \
 		mnl_attr_put_u32(nlh, attr_id, __val); \
 	} while (0)
 
@@ -665,17 +673,7 @@ static int cmd_device_show(struct dpll *dpll)
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "id")) {
-			char *str;
-
-			str = dpll_argv_next(dpll);
-			if (!str) {
-				pr_err("id requires an argument\n");
-				return -EINVAL;
-			}
-			if (get_u32(&id, str, 0)) {
-				pr_err("invalid id: %s\n", str);
-				return -EINVAL;
-			}
+			DPLL_PARSE_U32(dpll, "id", &id);
 			has_id = true;
 		} else {
 			pr_err("unknown option: %s\n", dpll_argv(dpll));
@@ -702,16 +700,7 @@ static int cmd_device_set(struct dpll *dpll)
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "id")) {
-			char *str = dpll_argv_next(dpll);
-
-			if (!str) {
-				pr_err("id requires an argument\n");
-				return -EINVAL;
-			}
-			if (get_u32(&id, str, 0)) {
-				pr_err("invalid id: %s\n", str);
-				return -EINVAL;
-			}
+			DPLL_PARSE_U32(dpll, "id", &id);
 			mnl_attr_put_u32(nlh, DPLL_A_ID, id);
 			has_id = true;
 		} else if (dpll_argv_match(dpll, "phase-offset-monitor")) {
@@ -1496,28 +1485,10 @@ static int cmd_pin_show(struct dpll *dpll)
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "id")) {
-			char *str = dpll_argv_next(dpll);
-
-			if (!str) {
-				pr_err("id requires an argument\n");
-				return -EINVAL;
-			}
-			if (get_u32(&pin_id, str, 0)) {
-				pr_err("invalid pin id: %s\n", str);
-				return -EINVAL;
-			}
+			DPLL_PARSE_U32(dpll, "id", &pin_id);
 			has_pin_id = true;
 		} else if (dpll_argv_match(dpll, "device")) {
-			char *str = dpll_argv_next(dpll);
-
-			if (!str) {
-				pr_err("device requires an argument\n");
-				return -EINVAL;
-			}
-			if (get_u32(&device_id, str, 0)) {
-				pr_err("invalid device id: %s\n", str);
-				return -EINVAL;
-			}
+			DPLL_PARSE_U32(dpll, "device", &device_id);
 			has_device_id = true;
 		} else {
 			pr_err("unknown option: %s\n", dpll_argv(dpll));
@@ -1545,16 +1516,7 @@ static int cmd_pin_set(struct dpll *dpll)
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "id")) {
-			char *str = dpll_argv_next(dpll);
-
-			if (!str) {
-				pr_err("id requires an argument\n");
-				return -EINVAL;
-			}
-			if (get_u32(&id, str, 0)) {
-				pr_err("invalid pin id: %s\n", str);
-				return -EINVAL;
-			}
+			DPLL_PARSE_U32(dpll, "id", &id);
 			mnl_attr_put_u32(nlh, DPLL_A_PIN_ID, id);
 			has_id = true;
 		} else if (dpll_argv_match(dpll, "frequency")) {
