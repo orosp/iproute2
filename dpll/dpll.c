@@ -230,6 +230,13 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
 				     mnl_attr_get_u64(tb[attr_id])); \
 	} while (0)
 
+#define DPLL_PR_S64_FMT(tb, attr_id, name, format_str) \
+	do { \
+		if (tb[attr_id]) \
+			print_lluint(PRINT_ANY, name, format_str, \
+				     (long long)mnl_attr_get_u64(tb[attr_id])); \
+	} while (0)
+
 #define DPLL_PR_STR_FMT(tb, attr_id, name, format_str) \
 	do { \
 		if (tb[attr_id]) \
@@ -246,6 +253,9 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
 
 #define DPLL_PR_U64(tb, attr_id, name) \
 	DPLL_PR_U64_FMT(tb, attr_id, name, "  " name ": %llu\n")
+
+#define DPLL_PR_S64(tb, attr_id, name) \
+	DPLL_PR_S64_FMT(tb, attr_id, name, "  " name ": %lld\n")
 
 #define DPLL_PR_STR(tb, attr_id, name) \
 	DPLL_PR_STR_FMT(tb, attr_id, name, "  " name ": %s\n")
@@ -984,10 +994,9 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST, "phase-adjust");
 
 	/* Print fractional frequency offset */
-	if (tb[DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET])
-		print_lluint(PRINT_ANY, "fractional_frequency_offset",
-			     "  fractional-frequency-offset: %lld ppb\n",
-			     (long long)mnl_attr_get_u64(tb[DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET]));
+	DPLL_PR_S64_FMT(tb, DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET,
+			"fractional_frequency_offset",
+			"  fractional-frequency-offset: %lld ppb\n");
 
 	/* Print esync frequency and related attributes */
 	DPLL_PR_U64_FMT(tb, DPLL_A_PIN_ESYNC_FREQUENCY, "esync_frequency",
