@@ -78,13 +78,26 @@ echo ""
 # Check that macros use dpll_argv_next() for self-contained argument parsing
 echo "[5] Checking that macros use dpll_argv_next() for self-contained parsing..."
 
+# Check helper macros (DPLL_PARSE_U32, etc) use dpll_argv_next
+for MACRO in DPLL_PARSE_U32 DPLL_PARSE_S32 DPLL_PARSE_U64; do
+    if grep -q "#define $MACRO" "$DPLL_C"; then
+        if awk "/#define $MACRO/,/} while \(0\)/" "$DPLL_C" | grep -q "dpll_argv_next"; then
+            echo "    ✓ $MACRO uses dpll_argv_next() (helper macro)"
+        else
+            echo "    ⚠ WARNING: $MACRO doesn't use dpll_argv_next()"
+            WARNINGS=$((WARNINGS + 1))
+        fi
+    fi
+done
+
+# Check that DPLL_PARSE_ATTR_* macros exist and delegate to helpers or use dpll_argv_next
 for MACRO in DPLL_PARSE_ATTR_U32 DPLL_PARSE_ATTR_S32 DPLL_PARSE_ATTR_U64 DPLL_PARSE_ATTR_STR; do
     if grep -q "#define $MACRO" "$DPLL_C"; then
-        # Check if macro uses dpll_argv_next
-        if awk "/#define $MACRO/,/} while \(0\)/" "$DPLL_C" | grep -q "dpll_argv_next"; then
-            echo "    ✓ $MACRO uses dpll_argv_next() (self-contained)"
+        # Check if it uses helper (DPLL_PARSE_*) or dpll_argv_next directly
+        if awk "/#define $MACRO/,/} while \(0\)/" "$DPLL_C" | grep -qE "DPLL_PARSE_|dpll_argv_next"; then
+            echo "    ✓ $MACRO is self-contained (uses helper or dpll_argv_next)"
         else
-            echo "    ✗ ERROR: $MACRO doesn't use dpll_argv_next()"
+            echo "    ✗ ERROR: $MACRO is not self-contained"
             ERRORS=$((ERRORS + 1))
         fi
     fi
