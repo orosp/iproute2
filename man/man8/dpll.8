@@ -65,7 +65,7 @@ Use numeric values for enum fields instead of human-readable names.
 
 .SH DEVICE COMMANDS
 
-.SS dpll device show [ id ID ] [ module-name NAME ]
+.SS dpll device show [ id ID ]
 
 Display information about DPLL devices. If no arguments are specified,
 shows all devices in the system.
@@ -73,10 +73,6 @@ shows all devices in the system.
 .TP
 .BI id " ID"
 Show only the device with the specified numeric identifier.
-
-.TP
-.BI module-name " NAME"
-Show only devices provided by the specified kernel module.
 
 .PP
 Output includes:
@@ -115,14 +111,15 @@ When enabled, the kernel continuously measures and reports phase differences.
 Set the averaging factor (1-255) applied to phase offset calculations.
 Higher values provide smoother but slower-responding measurements.
 
-.SS dpll device id-get module-name NAME [ clock-id ID ] [ type TYPE ]
+.SS dpll device id-get [ module-name NAME ] [ clock-id ID ] [ type TYPE ]
 
 Retrieve the device ID based on identifying attributes. Useful for scripting
-when you need to find a device's numeric ID.
+when you need to find a device's numeric ID. At least one attribute should
+be specified to identify the device.
 
 .TP
 .BI module-name " NAME"
-Kernel module name (required).
+Kernel module name.
 
 .TP
 .BI clock-id " ID"
@@ -192,28 +189,15 @@ Set pin frequency in Hz. The pin must support the specified frequency
 (check frequency-supported ranges in pin show output).
 
 .TP
-.BI direction " { input | output }"
-Set pin direction. Only valid for pins with direction-can-change capability.
+.BI phase-adjust " ADJUSTMENT"
+Set phase adjustment in picoseconds. This value fine-tunes the phase
+of the output signal. Negative values shift the phase backwards,
+positive values shift it forwards. The value must be within the
+phase-adjust-min and phase-adjust-max range.
 
 .TP
-.BI prio " PRIORITY"
-Set pin priority (0-255). Lower values indicate higher priority.
-Only valid for pins with priority-can-change capability.
-
-.TP
-.BI state " { connected | disconnected | selectable }"
-Set pin state. Only valid for pins with state-can-change capability.
-.RS
-.IP \[bu] 2
-.B connected
-\- Pin is actively connected and in use
-.IP \[bu]
-.B disconnected
-\- Pin is disconnected and not in use
-.IP \[bu]
-.B selectable
-\- Pin is available but not currently selected
-.RE
+.BI esync-frequency " FREQUENCY"
+Set enhanced SyncE (Synchronous Ethernet) frequency in Hz for capable pins.
 
 .TP
 .BI parent-device " DEVICE_ID " "[ " "direction DIR" " ] [ " "prio PRIO" " ] [ " "state STATE" " ]"
@@ -233,24 +217,6 @@ Set the pin's state on the parent device.
 .TP
 .BI parent-pin " PIN_ID " "[ " "state STATE" " ]"
 Configure the relationship to a parent pin.
-
-.TP
-.BI phase-adjust-gran " GRANULARITY"
-Set the phase adjustment granularity in picoseconds. The phase-adjust
-value must be a multiple of this granularity. This is typically
-hardware-specific and read-only, but some devices allow configuration.
-
-.TP
-.BI phase-adjust " ADJUSTMENT"
-Set phase adjustment in picoseconds. This value fine-tunes the phase
-of the output signal. Negative values shift the phase backwards,
-positive values shift it forwards. The value must be within the
-phase-adjust-min and phase-adjust-max range, and must be a multiple
-of phase-adjust-gran if specified.
-
-.TP
-.BI esync-frequency " FREQUENCY"
-Set enhanced SyncE (Synchronous Ethernet) frequency in Hz for capable pins.
 
 .TP
 .BI reference-sync " PIN_ID " "[ " "state STATE" " ]"
@@ -342,9 +308,9 @@ Press Ctrl+C to stop monitoring.
 .B dpll pin set id 0 frequency 10000000
 .fi
 
-.SS Configure pin priority on parent device
+.SS Configure pin relationship to parent device
 .nf
-.B dpll pin set id 1 parent-device 0 prio 10
+.B dpll pin set id 1 parent-device 0 prio 10 direction input state connected
 .fi
 
 .SS Adjust phase by -1000 picoseconds
@@ -354,7 +320,7 @@ Press Ctrl+C to stop monitoring.
 
 .SS Set multiple pin parameters at once
 .nf
-.B dpll pin set id 3 frequency 1 prio 5 state connected
+.B dpll pin set id 3 frequency 10000000 phase-adjust -1000
 .fi
 
 .SS Monitor DPLL events

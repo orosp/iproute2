@@ -39,7 +39,8 @@ _dpll_direct_complete()
             ;;
         module_name)
             value=$(dpll -j device show 2>/dev/null \
-                    | jq '.device[].module_name' 2>/dev/null)
+                    | jq -r '.device[]."module-name"' 2>/dev/null \
+                    | sort -u)
             ;;
     esac
 
@@ -138,12 +139,17 @@ _dpll_pin()
             ;;
         set)
             case $prev in
-                id)
+                id|parent-device)
+                    COMPREPLY=( $( compgen -W \
+                        "$(_dpll_direct_complete device_id)" -- "$cur" ) )
+                    return 0
+                    ;;
+                parent-pin|reference-sync)
                     COMPREPLY=( $( compgen -W \
                         "$(_dpll_direct_complete pin_id)" -- "$cur" ) )
                     return 0
                     ;;
-                frequency|phase-adjust|esync-frequency)
+                frequency|phase-adjust|esync-frequency|prio)
                     # numeric value, no completion
                     return 0
                     ;;
@@ -151,24 +157,40 @@ _dpll_pin()
                     COMPREPLY=( $( compgen -W "input output" -- "$cur" ) )
                     return 0
                     ;;
-                prio)
-                    # numeric value, no completion
-                    return 0
-                    ;;
                 state)
                     COMPREPLY=( $( compgen -W \
                         "connected disconnected selectable" -- "$cur" ) )
                     return 0
                     ;;
-                parent-device|parent-pin)
-                    COMPREPLY=( $( compgen -W \
-                        "$(_dpll_direct_complete device_id)" -- "$cur" ) )
-                    return 0
-                    ;;
                 *)
-                    COMPREPLY=( $( compgen -W "id frequency direction prio \
-                        state parent-device parent-pin phase-adjust \
-                        esync-frequency" -- "$cur" ) )
+                    # Check if we are in nested context (after parent-device/parent-pin/reference-sync)
+                    local i nested_keyword=""
+                    for (( i=cword-1; i>0; i-- )); do
+                        case "${words[i]}" in
+                            parent-device)
+                                nested_keyword="parent-device"
+                                break
+                                ;;
+                            parent-pin|reference-sync)
+                                nested_keyword="parent-pin"
+                                break
+                                ;;
+                            id|frequency|phase-adjust|esync-frequency)
+                                # Hit a top-level keyword, not in nested context
+                                break
+                                ;;
+                        esac
+                    done
+
+                    if [[ "$nested_keyword" == "parent-device" ]]; then
+                        COMPREPLY=( $( compgen -W "direction prio state" -- "$cur" ) )
+                    elif [[ "$nested_keyword" == "parent-pin" ]]; then
+                        COMPREPLY=( $( compgen -W "state" -- "$cur" ) )
+                    else
+                        COMPREPLY=( $( compgen -W "id frequency phase-adjust \
+                            esync-frequency parent-device parent-pin reference-sync" \
+                            -- "$cur" ) )
+                    fi
                     return 0
                     ;;
             esac
@@ -190,8 +212,7 @@ _dpll_pin()
                     ;;
                 type)
                     COMPREPLY=( $( compgen -W "mux ext synce-eth-port \
-                        synce-eth-port-netdev synce-eth-port-mac gnss" \
-                        -- "$cur" ) )
+                        int-oscillator gnss" -- "$cur" ) )
                     return 0
                     ;;
                 *)
