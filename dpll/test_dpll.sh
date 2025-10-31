@@ -440,7 +440,13 @@ test_device_operations() {
 
 			# Check if either tool returned an error
 			local python_error=$(grep -qE "Netlink (warning|error):" "$python_dev_json" 2>/dev/null && echo "yes" || echo "no")
-			local dpll_error=$(grep -q "Failed to get\|Failed to dump" "$dpll_dev_json" 2>/dev/null && echo "yes" || echo "no")
+			# dpll error: check for error message OR empty JSON {}
+			local dpll_has_error_msg=$(grep -q "Failed to get\|Failed to dump" "$dpll_dev_json" 2>/dev/null && echo "yes" || echo "no")
+			local dpll_json_content=$(grep -o '{.*}' "$dpll_dev_json" 2>/dev/null | tr -d '[:space:]')
+			local dpll_error="no"
+			if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
+				dpll_error="yes"
+			fi
 
 			if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
 				print_result PASS "device show id $device_id (vs Python) (both returned error)"
@@ -523,7 +529,13 @@ test_device_id_get() {
 
 				# Check if either tool returned an error
 				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
-				local dpll_error=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+				# dpll error: check for "Failed to get" message OR empty JSON {}
+				local dpll_has_error_msg=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+				local dpll_json_content=$(grep -o '{.*}' "$dpll_result" 2>/dev/null | tr -d '[:space:]')
+				local dpll_error="no"
+				if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
+					dpll_error="yes"
+				fi
 
 				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
 					print_result PASS "device id-get module-name (vs Python) (both returned error)"
@@ -581,7 +593,13 @@ test_device_id_get() {
 
 				# Check if either tool returned an error
 				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
-				local dpll_error=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+				# dpll error: check for "Failed to get" message OR empty JSON {}
+				local dpll_has_error_msg=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+				local dpll_json_content=$(grep -o '{.*}' "$dpll_result" 2>/dev/null | tr -d '[:space:]')
+				local dpll_error="no"
+				if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
+					dpll_error="yes"
+				fi
 
 				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
 					# Both returned error - this is correct behavior (e.g., multiple matches)
@@ -672,7 +690,13 @@ test_pin_operations() {
 
 			# Check if either tool returned an error
 			local python_error=$(grep -qE "Netlink (warning|error):" "$python_pin_json" 2>/dev/null && echo "yes" || echo "no")
-			local dpll_error=$(grep -q "Failed to get\|Failed to dump" "$dpll_pin_json" 2>/dev/null && echo "yes" || echo "no")
+			# dpll error: check for error message OR empty JSON {}
+			local dpll_has_error_msg=$(grep -q "Failed to get\|Failed to dump" "$dpll_pin_json" 2>/dev/null && echo "yes" || echo "no")
+			local dpll_json_content=$(grep -o '{.*}' "$dpll_pin_json" 2>/dev/null | tr -d '[:space:]')
+			local dpll_error="no"
+			if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
+				dpll_error="yes"
+			fi
 
 			if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
 				print_result PASS "pin show id $pin_id (vs Python) (both returned error)"
@@ -755,7 +779,13 @@ test_pin_id_get() {
 
 				# Check if either tool returned an error
 				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
-				local dpll_error=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+				# dpll error: check for "Failed to get" message OR empty JSON {}
+				local dpll_has_error_msg=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+				local dpll_json_content=$(grep -o '{.*}' "$dpll_result" 2>/dev/null | tr -d '[:space:]')
+				local dpll_error="no"
+				if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
+					dpll_error="yes"
+				fi
 
 				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
 					print_result PASS "pin id-get board-label (vs Python) (both returned error)"
@@ -810,7 +840,13 @@ test_pin_id_get() {
 
 				# Check if either tool returned an error
 				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
-				local dpll_error=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+				# dpll error: check for "Failed to get" message OR empty JSON {}
+				local dpll_has_error_msg=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
+				local dpll_json_content=$(grep -o '{.*}' "$dpll_result" 2>/dev/null | tr -d '[:space:]')
+				local dpll_error="no"
+				if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
+					dpll_error="yes"
+				fi
 
 				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
 					print_result PASS "pin id-get module-name (vs Python) (both returned error)"
