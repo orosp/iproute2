@@ -93,17 +93,20 @@ DPLL_TOOL_BIN="./dpll"
 PYTHON_CLI="/root/net-next/tools/net/ynl/pyynl/cli.py"
 DPLL_SPEC="/root/net-next/Documentation/netlink/specs/dpll.yaml"
 TEST_DIR="/tmp/dpll_test_$$"
+ERROR_LOG="$TEST_DIR/all_errors.log"
 
-# Create wrapper script for dpll tool that adds sleep after execution
-# This ensures kernel has time to flush dmesg messages
+# Create wrapper script for dpll tool that:
+# 1. Captures all stderr to ERROR_LOG
+# 2. Adds sleep after execution for kernel dmesg flush
 DPLL_TOOL="$TEST_DIR/dpll_wrapper.sh"
 mkdir -p "$TEST_DIR"
-cat > "$DPLL_TOOL" << 'WRAPPER_EOF'
+cat > "$DPLL_TOOL" <<WRAPPER_EOF
 #!/bin/bash
-./dpll "$@"
-exit_code=$?
+ERROR_LOG_FILE="$ERROR_LOG"
+./dpll "\$@" 2>> "\$ERROR_LOG_FILE"
+exit_code=\$?
 sleep 1
-exit $exit_code
+exit \$exit_code
 WRAPPER_EOF
 chmod +x "$DPLL_TOOL"
 
@@ -119,11 +122,21 @@ mkdir -p "$TEST_DIR"
 
 # Store initial dmesg state (count of lines, not content)
 DMESG_BASELINE_COUNT="$TEST_DIR/dmesg_baseline_count.txt"
-dmesg 2>/dev/null | wc -l > "$DMESG_BASELINE_COUNT" || echo "0" > "$DMESG_BASELINE_COUNT"
+dmesg 2>> "$ERROR_LOG" | wc -l > "$DMESG_BASELINE_COUNT" || echo "0" > "$DMESG_BASELINE_COUNT"
 
 # Cleanup on exit
 cleanup() {
-	rm -rf "$TEST_DIR"
+	if [ -f "$ERROR_LOG" ] && [ -s "$ERROR_LOG" ]; then
+		echo ""
+		echo -e "${YELLOW}Error log saved to: $ERROR_LOG${NC}"
+		echo -e "${DIM}(contains all stderr output from commands)${NC}"
+	fi
+	# Don't remove TEST_DIR automatically if there were errors
+	if [ $FAILED_TESTS -eq 0 ] && [ $DMESG_ERRORS -eq 0 ]; then
+		rm -rf "$TEST_DIR"
+	else
+		echo -e "${YELLOW}Test artifacts saved in: $TEST_DIR${NC}"
+	fi
 }
 trap cleanup EXIT
 
@@ -268,11 +281,22 @@ check_prerequisites() {
 		exit 1
 	fi
 
-	# Check if Python CLI exists
+	# Check if Python CLI exists and create wrapper
 	if [ ! -f "$PYTHON_CLI" ]; then
 		echo -e "${YELLOW}Warning: Python CLI not found at $PYTHON_CLI${NC}"
 		echo "Some tests will be skipped"
 		PYTHON_CLI=""
+	else
+		# Create Python CLI wrapper that captures stderr
+		PYTHON_CLI_ORIG="$PYTHON_CLI"
+		PYTHON_CLI="$TEST_DIR/python_cli_wrapper.sh"
+		cat > "$PYTHON_CLI" <<PYWRAPPER_EOF
+#!/bin/bash
+ERROR_LOG_FILE="$ERROR_LOG"
+python3 "$PYTHON_CLI_ORIG" "\$@" 2>> "\$ERROR_LOG_FILE"
+PYWRAPPER_EOF
+		chmod +x "$PYTHON_CLI"
+		export PYTHON_CLI_ORIG
 	fi
 
 	# Check if DPLL spec exists
