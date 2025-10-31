@@ -1974,72 +1974,46 @@ test_monitor_events() {
 		return
 	fi
 
-	# Get all pins in JSON
-	local all_pins_json="$TEST_DIR/monitor_all_pins.json"
-	$DPLL_TOOL -j pin show > "$all_pins_json" 2>/dev/null || true
-
 	# Find a pin suitable for testing (has changeable attributes with top-level values)
 	local pin_id=""
 	local test_attr=""
 	local orig_value=""
 	local new_value=""
-	local pin_count=$(jq -r '.pin | length' "$all_pins_json" 2>/dev/null || echo 0)
 
 	# Strategy 1: Find pin with priority-can-change capability AND has prio attribute
-	for ((i=0; i<pin_count; i++)); do
-		local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
-		local has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
-		local prio=$(jq -r ".pin[$i].prio // empty" "$all_pins_json" 2>/dev/null)
-
-		if [ "$has_prio_cap" = "true" ] && [ -n "$prio" ]; then
-			pin_id="$id"
-			test_attr="prio"
-			orig_value="$prio"
-			new_value=$((prio + 5))
-			break
-		fi
-	done
+	pin_id=$(dpll_find_pin --with-capability "priority-can-change" --with-attr "prio")
+	if [ -n "$pin_id" ]; then
+		test_attr="prio"
+		orig_value=$(dpll_get_pin_attr "$pin_id" "prio")
+		new_value=$((orig_value + 5))
+	fi
 
 	# Strategy 2: Find pin with direction-can-change capability
 	if [ -z "$pin_id" ]; then
-		for ((i=0; i<pin_count; i++)); do
-			local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
-			local has_dir_cap=$(jq -r ".pin[$i].capabilities | contains([\"direction-can-change\"])" "$all_pins_json" 2>/dev/null)
-			local direction=$(jq -r ".pin[$i].direction // empty" "$all_pins_json" 2>/dev/null)
-
-			if [ "$has_dir_cap" = "true" ] && [ -n "$direction" ]; then
-				pin_id="$id"
-				test_attr="direction"
-				orig_value="$direction"
-				if [ "$direction" = "input" ]; then
-					new_value="output"
-				else
-					new_value="input"
-				fi
-				break
+		pin_id=$(dpll_find_pin --with-capability "direction-can-change" --with-attr "direction")
+		if [ -n "$pin_id" ]; then
+			test_attr="direction"
+			orig_value=$(dpll_get_pin_attr "$pin_id" "direction")
+			if [ "$orig_value" = "input" ]; then
+				new_value="output"
+			else
+				new_value="input"
 			fi
-		done
+		fi
 	fi
 
 	# Strategy 3: Find pin with changeable frequency
 	if [ -z "$pin_id" ]; then
-		for ((i=0; i<pin_count; i++)); do
-			local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
-			local freq=$(jq -r ".pin[$i].frequency // empty" "$all_pins_json" 2>/dev/null)
-			local freq_count=$(jq -r ".pin[$i].\"frequency-supported\" | length" "$all_pins_json" 2>/dev/null || echo 0)
-
-			if [ -n "$freq" ] && [ "$freq_count" -gt 1 ]; then
-				# Find different frequency
-				local alt_freq=$(jq -r ".pin[$i].\"frequency-supported\"[1].\"frequency-min\" // empty" "$all_pins_json" 2>/dev/null)
-				if [ -n "$alt_freq" ] && [ "$alt_freq" != "$freq" ]; then
-					pin_id="$id"
-					test_attr="frequency"
-					orig_value="$freq"
-					new_value="$alt_freq"
-					break
-				fi
+		pin_id=$(dpll_find_pin --with-capability "frequency-can-change" --with-attr "frequency")
+		if [ -n "$pin_id" ]; then
+			test_attr="frequency"
+			orig_value=$(dpll_get_pin_attr "$pin_id" "frequency")
+			new_value=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
+			if [ -z "$new_value" ] || [ "$new_value" = "$orig_value" ]; then
+				# No alternative frequency, clear pin_id
+				pin_id=""
 			fi
-		done
+		fi
 	fi
 
 	if [ -z "$pin_id" ]; then
@@ -2169,24 +2143,20 @@ test_monitor_python_parity() {
 	fi
 
 	# Find a pin with changeable attribute
-	local all_pins_json="$TEST_DIR/parity_all_pins.json"
-	./dpll -j pin show > "$all_pins_json" 2>/dev/null
-
-	local pin_count=$(jq '.pin | length' "$all_pins_json" 2>/dev/null || echo 0)
 	local pin_id=""
 	local freq=""
 	local alt_freq=""
 	local test_attr=""
 
 	# Strategy 1: Find pin with changeable frequency (2+ supported frequencies)
-	for ((i=0; i<pin_count; i++)); do
-		local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
-		local current_freq=$(jq -r ".pin[$i].frequency // empty" "$all_pins_json" 2>/dev/null)
-		local freq_count=$(jq -r ".pin[$i].\"frequency-supported\" | length" "$all_pins_json" 2>/dev/null || echo 0)
+	pin_id=$(dpll_find_pin --with-capability "frequency-can-change" --with-attr "frequency")
+	if [ -n "$pin_id" ]; then
+		local current_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
+		local freq_count=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"] | length' 2>> "$ERROR_LOG" || echo 0)
 
-		if [ -n "$current_freq" ] && [ "$freq_count" -ge 2 ]; then
-			local freq1=$(jq -r ".pin[$i].\"frequency-supported\"[0].\"frequency-min\"" "$all_pins_json" 2>/dev/null)
-			local freq2=$(jq -r ".pin[$i].\"frequency-supported\"[1].\"frequency-min\"" "$all_pins_json" 2>/dev/null)
+		if [ "$freq_count" -ge 2 ]; then
+			local freq1=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][0]."frequency-min"' 2>> "$ERROR_LOG")
+			local freq2=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min"' 2>> "$ERROR_LOG")
 
 			# Make sure we pick a frequency different from current
 			local selected_freq=""
@@ -2197,22 +2167,24 @@ test_monitor_python_parity() {
 			fi
 
 			if [ -n "$selected_freq" ] && [ "$selected_freq" != "$current_freq" ]; then
-				pin_id="$id"
 				freq="$current_freq"
 				alt_freq="$selected_freq"
 				test_attr="frequency"
-				break
+			else
+				pin_id=""
 			fi
+		else
+			pin_id=""
 		fi
-	done
+	fi
 
 	# Strategy 2: Find pin with priority-can-change and parent-device prio
 	if [ -z "$pin_id" ]; then
-		for ((i=0; i<pin_count; i++)); do
-			local id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
-			local has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
-			local parent_id=$(jq -r ".pin[$i].\"parent-device\"[0].\"parent-id\" // empty" "$all_pins_json" 2>/dev/null)
-			local parent_prio=$(jq -r ".pin[$i].\"parent-device\"[0].prio // empty" "$all_pins_json" 2>/dev/null)
+		dpll_load_pins
+		for id in "${!DPLL_PIN_CACHE[@]}"; do
+			local has_prio_cap=$(echo "${DPLL_PIN_CACHE[$id]}" | jq -r '.capabilities | contains(["priority-can-change"])' 2>> "$ERROR_LOG")
+			local parent_id=$(echo "${DPLL_PIN_CACHE[$id]}" | jq -r '.["parent-device"][0]."parent-id" // empty' 2>> "$ERROR_LOG")
+			local parent_prio=$(echo "${DPLL_PIN_CACHE[$id]}" | jq -r '.["parent-device"][0].prio // empty' 2>> "$ERROR_LOG")
 
 			if [ "$has_prio_cap" = "true" ] && [ -n "$parent_id" ] && [ -n "$parent_prio" ]; then
 				pin_id="$id"
@@ -2708,19 +2680,14 @@ test_pin_complete_comparison() {
 		return
 	fi
 
-	local dpll_json="$TEST_DIR/dpll_pins_complete.json"
-	$DPLL_TOOL -j pin show > "$dpll_json" 2>/dev/null || true
-	local pin_count=$(jq -r '.pin | length' "$dpll_json" 2>/dev/null || echo 0)
+	# Pick a random pin using the API
+	local pin_id=$(dpll_find_pin --random)
 
-	if [ "$pin_count" -eq 0 ]; then
+	if [ -z "$pin_id" ]; then
 		print_result SKIP "complete pin comparison (no pins available)"
 		echo ""
 		return
 	fi
-
-	# Pick a random pin
-	local random_index=$((RANDOM % pin_count))
-	local pin_id=$(jq -r ".pin[$random_index].id" "$dpll_json" 2>/dev/null)
 
 	local test_name="Pin $pin_id: complete output comparison (all fields)"
 
@@ -2786,19 +2753,14 @@ test_device_complete_comparison() {
 		return
 	fi
 
-	local dpll_json="$TEST_DIR/dpll_devices_complete.json"
-	$DPLL_TOOL -j device show > "$dpll_json" 2>/dev/null || true
-	local device_count=$(jq -r '.device | length' "$dpll_json" 2>/dev/null || echo 0)
+	# Pick a random device using the API
+	local device_id=$(dpll_find_device --random)
 
-	if [ "$device_count" -eq 0 ]; then
+	if [ -z "$device_id" ]; then
 		print_result SKIP "complete device comparison (no devices available)"
 		echo ""
 		return
 	fi
-
-	# Pick a random device
-	local random_index=$((RANDOM % device_count))
-	local device_id=$(jq -r ".device[$random_index].id" "$dpll_json" 2>/dev/null)
 
 	local test_name="Device $device_id: complete output comparison (all fields)"
 
