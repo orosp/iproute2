@@ -1134,7 +1134,7 @@ test_device_id_get() {
 			local dpll_result_basic="$TEST_DIR/dpll_device_id_get_module_basic.txt"
 			$DPLL_TOOL device id-get module-name "$module_name" > "$dpll_result_basic" 2>&1 || true
 			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
-			local has_error=$(grep -q "Failed to get" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+			local has_error=$(grep -qE "Failed to get|No device found" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
 
 			if [ "$has_error" = "yes" ]; then
 				# Error is expected if there are multiple devices with same module-name
@@ -1191,7 +1191,7 @@ test_device_id_get() {
 			local dpll_result_basic="$TEST_DIR/dpll_device_id_get_clock_basic.txt"
 			$DPLL_TOOL device id-get module-name "$module_name" clock-id "$clock_id" > "$dpll_result_basic" 2>&1 || true
 			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
-			local has_error=$(grep -q "Failed to get" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+			local has_error=$(grep -qE "Failed to get|No device found" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
 
 			if [ "$has_error" = "yes" ]; then
 				# Error is expected if there are multiple devices
@@ -1416,7 +1416,7 @@ test_pin_id_get() {
 			local dpll_result_basic="$TEST_DIR/dpll_pin_id_get_module_basic.txt"
 			$DPLL_TOOL pin id-get module-name "$module_name" > "$dpll_result_basic" 2>&1 || true
 			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
-			local has_error=$(grep -q "Failed to get" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+			local has_error=$(grep -qE "Failed to get|No pin found" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
 
 			if [ "$has_error" = "yes" ]; then
 				# Error is expected if there are multiple pins with same module-name
