@@ -299,6 +299,42 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
 #define DPLL_PR_ENUM_STR(tb, attr_id, name, name_func) \
 	DPLL_PR_ENUM_STR_FMT(tb, attr_id, name, "  " name ": %s\n", name_func)
 
+/* Multi-attr enum printer - handles multiple occurrences of same attribute */
+#define DPLL_PR_MULTI_ENUM_STR(nlh, attr_id, name, name_func) \
+	do { \
+		if (nlh) { \
+			struct genlmsghdr *__genl = mnl_nlmsg_get_payload(nlh); \
+			struct nlattr *__attr; \
+			bool __first = true; \
+			mnl_attr_for_each(__attr, nlh, sizeof(*__genl)) { \
+				if (mnl_attr_get_type(__attr) == (attr_id)) { \
+					__u32 __val = mnl_attr_get_u32(__attr); \
+					if (__first) { \
+						if (is_json_context()) { \
+							open_json_array(PRINT_JSON, name); \
+						} else { \
+							pr_out("  " name ":"); \
+						} \
+						__first = false; \
+					} \
+					if (is_json_context()) { \
+						print_string(PRINT_JSON, NULL, NULL, \
+							     name_func(__val)); \
+					} else { \
+						pr_out(" %s", name_func(__val)); \
+					} \
+				} \
+			} \
+			if (!__first) { \
+				if (is_json_context()) { \
+					close_json_array(PRINT_JSON, NULL); \
+				} else { \
+					pr_out("\n"); \
+				} \
+			} \
+		} \
+	} while (0)
+
 static void help(void)
 {
 	pr_err("Usage: dpll [ OPTIONS ] OBJECT { COMMAND | help }\n"
@@ -585,42 +621,8 @@ static void dpll_device_print_attrs(const struct nlmsghdr *nlh, struct nlattr **
 
 	DPLL_PR_ENUM_STR(tb, DPLL_A_LOCK_STATUS_ERROR, "lock-status-error", dpll_lock_status_error_name);
 
-	/* Handle clock-quality-level - spec defines as type: u32, multi-attr: true */
-	if (nlh) {
-		struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
-		struct nlattr *attr;
-		bool first = true;
-
-		mnl_attr_for_each(attr, nlh, sizeof(*genl)) {
-			if (mnl_attr_get_type(attr) == DPLL_A_CLOCK_QUALITY_LEVEL) {
-				__u32 level = mnl_attr_get_u32(attr);
-
-				if (first) {
-					if (is_json_context()) {
-						open_json_array(PRINT_JSON, "clock-quality-level");
-					} else {
-						pr_out("  clock-quality-level:");
-					}
-					first = false;
-				}
-
-				if (is_json_context()) {
-					print_string(PRINT_JSON, NULL, NULL,
-						     dpll_clock_quality_level_name(level));
-				} else {
-					pr_out(" %s", dpll_clock_quality_level_name(level));
-				}
-			}
-		}
-
-		if (!first) {
-			if (is_json_context()) {
-				close_json_array(PRINT_JSON, NULL);
-			} else {
-				pr_out("\n");
-			}
-		}
-	}
+	DPLL_PR_MULTI_ENUM_STR(nlh, DPLL_A_CLOCK_QUALITY_LEVEL, "clock-quality-level",
+			       dpll_clock_quality_level_name);
 
 	if (tb[DPLL_A_TEMP]) {
 		__s32 temp = mnl_attr_get_u32(tb[DPLL_A_TEMP]);
@@ -634,42 +636,7 @@ static void dpll_device_print_attrs(const struct nlmsghdr *nlh, struct nlattr **
 		}
 	}
 
-	/* Handle mode-supported - spec defines as type: u32, multi-attr: true */
-	if (nlh) {
-		struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
-		struct nlattr *attr;
-		bool first = true;
-
-		mnl_attr_for_each(attr, nlh, sizeof(*genl)) {
-			if (mnl_attr_get_type(attr) == DPLL_A_MODE_SUPPORTED) {
-				__u32 mode = mnl_attr_get_u32(attr);
-
-				if (first) {
-					if (is_json_context()) {
-						open_json_array(PRINT_JSON, "mode-supported");
-					} else {
-						pr_out("  mode-supported:");
-					}
-					first = false;
-				}
-
-				if (is_json_context()) {
-					print_string(PRINT_JSON, NULL, NULL,
-						     dpll_mode_name(mode));
-				} else {
-					pr_out(" %s", dpll_mode_name(mode));
-				}
-			}
-		}
-
-		if (!first) {
-			if (is_json_context()) {
-				close_json_array(PRINT_JSON, NULL);
-			} else {
-				pr_out("\n");
-			}
-		}
-	}
+	DPLL_PR_MULTI_ENUM_STR(nlh, DPLL_A_MODE_SUPPORTED, "mode-supported", dpll_mode_name);
 
 	if (tb[DPLL_A_PHASE_OFFSET_MONITOR]) {
 		__u32 value = mnl_attr_get_u32(tb[DPLL_A_PHASE_OFFSET_MONITOR]);
