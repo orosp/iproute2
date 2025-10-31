@@ -1922,6 +1922,125 @@ test_device_temperature() {
 	echo ""
 }
 
+# Test phase offset monitoring capabilities
+test_phase_offset_monitoring() {
+	print_header "Testing Phase Offset Monitoring"
+
+	# Test 1: phase-offset-monitor attribute
+	local device_with_monitor=$(dpll_find_device --with-attr "phase-offset-monitor")
+
+	if [ -n "$device_with_monitor" ]; then
+		local monitor_state=$(dpll_get_device_attr "$device_with_monitor" "phase-offset-monitor")
+		print_result PASS "Device $device_with_monitor phase-offset-monitor: $monitor_state"
+
+		# Validate monitor state is valid enum
+		case "$monitor_state" in
+			disabled|enabled)
+				print_result PASS "Device $device_with_monitor phase-offset-monitor has valid value"
+				;;
+			*)
+				print_result FAIL "Device $device_with_monitor phase-offset-monitor has invalid value: $monitor_state"
+				;;
+		esac
+
+		# Test SET operations if enabled
+		if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
+			if dpll_device_set_and_verify "$device_with_monitor" "phase-offset-monitor" "enabled"; then
+				print_result PASS "Device $device_with_monitor set phase-offset-monitor to enabled"
+			else
+				print_result SKIP "Device $device_with_monitor phase-offset-monitor SET (not supported)"
+			fi
+
+			# Try to set back to original state
+			if [ "$monitor_state" = "disabled" ]; then
+				dpll_device_set "$device_with_monitor" "phase-offset-monitor" "disabled" >> "$ERROR_LOG" 2>&1
+			fi
+		fi
+	else
+		print_result SKIP "Phase-offset-monitor (no device with attribute)"
+	fi
+
+	# Test 2: phase-offset-avg-factor attribute
+	local device_with_avg=$(dpll_find_device --with-attr "phase-offset-avg-factor")
+
+	if [ -n "$device_with_avg" ]; then
+		local avg_factor=$(dpll_get_device_attr "$device_with_avg" "phase-offset-avg-factor")
+		print_result PASS "Device $device_with_avg phase-offset-avg-factor: $avg_factor"
+
+		# Validate it's a valid integer
+		if [[ "$avg_factor" =~ ^[0-9]+$ ]]; then
+			print_result PASS "Device $device_with_avg phase-offset-avg-factor is valid integer"
+		else
+			print_result FAIL "Device $device_with_avg phase-offset-avg-factor is not an integer: $avg_factor"
+		fi
+
+		# Test SET operations if enabled
+		if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
+			local test_factor=10
+			if dpll_device_set_and_verify "$device_with_avg" "phase-offset-avg-factor" "$test_factor"; then
+				print_result PASS "Device $device_with_avg set phase-offset-avg-factor to $test_factor"
+				# Restore original
+				dpll_device_set "$device_with_avg" "phase-offset-avg-factor" "$avg_factor" >> "$ERROR_LOG" 2>&1
+			else
+				print_result SKIP "Device $device_with_avg phase-offset-avg-factor SET (not supported)"
+			fi
+		fi
+	else
+		print_result SKIP "Phase-offset-avg-factor (no device with attribute)"
+	fi
+
+	# Test 3: phase-offset in parent-device context
+	local pin_with_phase=$(dpll_find_pin --with-attr "parent-device")
+
+	if [ -n "$pin_with_phase" ]; then
+		dpll_load_pins
+
+		# Check if any parent-device has phase-offset
+		local parent_count=$(echo "${DPLL_PIN_CACHE[$pin_with_phase]}" | jq -r '.["parent-device"] | length' 2>> "$ERROR_LOG")
+		local found_phase_offset=0
+
+		for ((i=0; i<parent_count; i++)); do
+			local phase_offset=$(echo "${DPLL_PIN_CACHE[$pin_with_phase]}" | jq -r ".\"parent-device\"[$i].\"phase-offset\" // empty" 2>> "$ERROR_LOG")
+			if [ -n "$phase_offset" ]; then
+				found_phase_offset=1
+				local parent_id=$(echo "${DPLL_PIN_CACHE[$pin_with_phase]}" | jq -r ".\"parent-device\"[$i].\"parent-id\"" 2>> "$ERROR_LOG")
+				print_result PASS "Pin $pin_with_phase parent-device $parent_id phase-offset: $phase_offset"
+
+				# Validate phase-offset is a valid s64 (can be negative)
+				if [[ "$phase_offset" =~ ^-?[0-9]+$ ]]; then
+					print_result PASS "Pin $pin_with_phase parent-device $parent_id phase-offset is valid s64"
+				else
+					print_result FAIL "Pin $pin_with_phase parent-device $parent_id phase-offset is not valid s64: $phase_offset"
+				fi
+
+				# Compare with Python CLI
+				if [ -n "$PYTHON_CLI" ]; then
+					local python_output="$TEST_DIR/python_pin_${pin_with_phase}_phase.json"
+					python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_with_phase}" --output-json > "$python_output" 2>&1 || true
+
+					if ! dpll_python_has_error "$python_output"; then
+						local phase_offset_python=$(jq -r ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id) | .\"phase-offset\" // empty" "$python_output" 2>/dev/null)
+						if [ "$phase_offset" = "$phase_offset_python" ]; then
+							print_result PASS "Pin $pin_with_phase parent-device $parent_id phase-offset matches Python CLI"
+						else
+							print_result FAIL "Pin $pin_with_phase parent-device $parent_id phase-offset mismatch (dpll=$phase_offset, python=$phase_offset_python)"
+						fi
+					fi
+				fi
+				break
+			fi
+		done
+
+		if [ $found_phase_offset -eq 0 ]; then
+			print_result SKIP "Phase-offset in parent-device (no pin with phase-offset)"
+		fi
+	else
+		print_result SKIP "Phase-offset in parent-device (no pin with parent-device)"
+	fi
+
+	echo ""
+}
+
 # Test pin state operations
 test_pin_state_operations() {
 	print_header "Testing Pin State Operations"
@@ -2107,6 +2226,300 @@ test_pin_priority_capability() {
 	else
 		print_result FAIL "$test_name (set command failed)"
 	fi
+
+	echo ""
+}
+
+# Test pin type and direction validation
+test_pin_type_validation() {
+	print_header "Testing Pin Type and Direction Validation"
+
+	dpll_load_pins || return
+
+	local tested_count=0
+	local pass_count=0
+
+	# Test 1: Validate pin type values
+	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
+		if dpll_pin_has_attr "$pin_id" "type"; then
+			local pin_type=$(dpll_get_pin_attr "$pin_id" "type")
+			tested_count=$((tested_count + 1))
+
+			# Validate type is one of valid enum values
+			case "$pin_type" in
+				MUX|EXT|SYNCE_ETH_PORT|INT_OSCILLATOR|GNSS)
+					print_result PASS "Pin $pin_id type is valid: $pin_type"
+					pass_count=$((pass_count + 1))
+					;;
+				*)
+					print_result FAIL "Pin $pin_id type has invalid value: $pin_type"
+					;;
+			esac
+		fi
+	done
+
+	if [ $tested_count -eq 0 ]; then
+		print_result SKIP "Pin type validation (no pins with type attribute)"
+	else
+		print_result PASS "Validated $pass_count/$tested_count pin types"
+	fi
+
+	# Test 2: Validate pin direction values
+	tested_count=0
+	pass_count=0
+
+	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
+		if dpll_pin_has_attr "$pin_id" "direction"; then
+			local direction=$(dpll_get_pin_attr "$pin_id" "direction")
+			tested_count=$((tested_count + 1))
+
+			# Validate direction is one of valid enum values
+			case "$direction" in
+				input|output)
+					print_result PASS "Pin $pin_id direction is valid: $direction"
+					pass_count=$((pass_count + 1))
+					;;
+				*)
+					print_result FAIL "Pin $pin_id direction has invalid value: $direction"
+					;;
+			esac
+		fi
+	done
+
+	if [ $tested_count -eq 0 ]; then
+		print_result SKIP "Pin direction validation (no pins with direction attribute)"
+	else
+		print_result PASS "Validated $pass_count/$tested_count pin directions"
+	fi
+
+	# Test 3: Compare types with Python CLI
+	if [ -n "$PYTHON_CLI" ]; then
+		local pin_id=$(dpll_find_pin --with-attr "type")
+		if [ -n "$pin_id" ]; then
+			local python_output="$TEST_DIR/python_pin_${pin_id}_type.json"
+			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+
+			if ! dpll_python_has_error "$python_output"; then
+				local type_dpll=$(dpll_get_pin_attr "$pin_id" "type")
+				local type_python=$(jq -r '.type // empty' "$python_output" 2>/dev/null)
+
+				if [ "$type_dpll" = "$type_python" ]; then
+					print_result PASS "Pin $pin_id type matches Python CLI"
+				else
+					print_result FAIL "Pin $pin_id type mismatch (dpll=$type_dpll, python=$type_python)"
+				fi
+			fi
+		fi
+	fi
+
+	echo ""
+}
+
+# Test pin capabilities in detail
+test_pin_capabilities_detailed() {
+	print_header "Testing Pin Capabilities Detailed"
+
+	dpll_load_pins || return
+
+	# Test 1: Validate capability values
+	local capability_count=0
+	local tested_pins=0
+
+	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
+		if dpll_pin_has_attr "$pin_id" "capabilities"; then
+			tested_pins=$((tested_pins + 1))
+			local capabilities=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.capabilities[]' 2>> "$ERROR_LOG")
+
+			for cap in $capabilities; do
+				capability_count=$((capability_count + 1))
+				# Validate capability is one of valid enum values
+				case "$cap" in
+					direction-can-change|priority-can-change|state-can-change|frequency-can-change)
+						print_result PASS "Pin $pin_id has valid capability: $cap"
+						;;
+					*)
+						print_result FAIL "Pin $pin_id has invalid capability: $cap"
+						;;
+				esac
+			done
+		fi
+	done
+
+	if [ $tested_pins -eq 0 ]; then
+		print_result SKIP "Pin capabilities validation (no pins with capabilities)"
+	else
+		print_result PASS "Validated $capability_count capabilities across $tested_pins pins"
+	fi
+
+	# Test 2: Verify capability consistency with SET operations
+	if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
+		# Test priority-can-change capability
+		local pin_with_prio_cap=$(dpll_find_pin --with-capability "priority-can-change")
+		if [ -n "$pin_with_prio_cap" ]; then
+			if dpll_has_parent_device "$pin_with_prio_cap"; then
+				local device_id=$(dpll_find_device)
+				local original_prio=$(dpll_get_parent_device_attr "$pin_with_prio_cap" "$device_id" "prio")
+
+				if [ -n "$original_prio" ]; then
+					local new_prio=$((original_prio + 1))
+					if dpll_pin_set "$pin_with_prio_cap" parent-device "$device_id" prio "$new_prio"; then
+						print_result PASS "Pin $pin_with_prio_cap with priority-can-change: priority SET works"
+						# Restore
+						dpll_pin_set "$pin_with_prio_cap" parent-device "$device_id" prio "$original_prio" >> "$ERROR_LOG" 2>&1
+					else
+						print_result FAIL "Pin $pin_with_prio_cap with priority-can-change: priority SET failed"
+					fi
+				fi
+			fi
+		fi
+
+		# Test state-can-change capability
+		local pin_with_state_cap=$(dpll_find_pin --with-capability "state-can-change")
+		if [ -n "$pin_with_state_cap" ]; then
+			local original_state=$(dpll_get_pin_attr "$pin_with_state_cap" "state")
+			if [ -n "$original_state" ]; then
+				if dpll_pin_set_and_verify "$pin_with_state_cap" "state" "connected"; then
+					print_result PASS "Pin $pin_with_state_cap with state-can-change: state SET works"
+					# Restore
+					dpll_pin_set "$pin_with_state_cap" "state" "$original_state" >> "$ERROR_LOG" 2>&1
+				else
+					print_result FAIL "Pin $pin_with_state_cap with state-can-change: state SET failed"
+				fi
+			fi
+		fi
+
+		# Test frequency-can-change capability
+		local pin_with_freq_cap=$(dpll_find_pin --with-capability "frequency-can-change")
+		if [ -n "$pin_with_freq_cap" ] && dpll_pin_has_attr "$pin_with_freq_cap" "frequency-supported"; then
+			local supported_freqs=$(echo "${DPLL_PIN_CACHE[$pin_with_freq_cap]}" | jq -r '.["frequency-supported"][]' 2>> "$ERROR_LOG" | head -2)
+			local freq_count=$(echo "$supported_freqs" | wc -l)
+
+			if [ "$freq_count" -ge 2 ]; then
+				local first_freq=$(echo "$supported_freqs" | head -1)
+				if dpll_pin_set_and_verify "$pin_with_freq_cap" "frequency" "$first_freq"; then
+					print_result PASS "Pin $pin_with_freq_cap with frequency-can-change: frequency SET works"
+				else
+					print_result FAIL "Pin $pin_with_freq_cap with frequency-can-change: frequency SET failed"
+				fi
+			fi
+		fi
+	else
+		print_result SKIP "Capability consistency verification (read-only mode, use --enable-set)"
+	fi
+
+	echo ""
+}
+
+# Test parent-device nested attributes comprehensively
+test_parent_device_attributes() {
+	print_header "Testing Parent-Device Nested Attributes"
+
+	local pin_with_parent=$(dpll_find_pin --with-attr "parent-device")
+
+	if [ -z "$pin_with_parent" ]; then
+		print_result SKIP "Parent-device nested attributes (no pin with parent-device)"
+		echo ""
+		return
+	fi
+
+	dpll_load_pins
+
+	local parent_count=$(echo "${DPLL_PIN_CACHE[$pin_with_parent]}" | jq -r '.["parent-device"] | length' 2>> "$ERROR_LOG")
+	print_result PASS "Pin $pin_with_parent has $parent_count parent-device entries"
+
+	# Test each parent-device entry
+	for ((i=0; i<parent_count; i++)); do
+		local parent_device=$(echo "${DPLL_PIN_CACHE[$pin_with_parent]}" | jq -c ".\"parent-device\"[$i]" 2>> "$ERROR_LOG")
+		local parent_id=$(echo "$parent_device" | jq -r '.["parent-id"]' 2>> "$ERROR_LOG")
+
+		# Test 1: parent-id is present
+		if [ -n "$parent_id" ]; then
+			print_result PASS "Pin $pin_with_parent parent-device[$i]: parent-id=$parent_id"
+		else
+			print_result FAIL "Pin $pin_with_parent parent-device[$i]: parent-id missing"
+			continue
+		fi
+
+		# Test 2: state attribute (if present)
+		local state=$(echo "$parent_device" | jq -r '.state // empty' 2>> "$ERROR_LOG")
+		if [ -n "$state" ]; then
+			case "$state" in
+				connected|disconnected|selectable)
+					print_result PASS "Pin $pin_with_parent parent-device[$i]: state=$state (valid)"
+					;;
+				*)
+					print_result FAIL "Pin $pin_with_parent parent-device[$i]: state=$state (invalid)"
+					;;
+			esac
+		fi
+
+		# Test 3: prio attribute (if present)
+		local prio=$(echo "$parent_device" | jq -r '.prio // empty' 2>> "$ERROR_LOG")
+		if [ -n "$prio" ]; then
+			if [[ "$prio" =~ ^[0-9]+$ ]]; then
+				print_result PASS "Pin $pin_with_parent parent-device[$i]: prio=$prio (valid u32)"
+			else
+				print_result FAIL "Pin $pin_with_parent parent-device[$i]: prio=$prio (not u32)"
+			fi
+		fi
+
+		# Test 4: direction attribute (if present)
+		local direction=$(echo "$parent_device" | jq -r '.direction // empty' 2>> "$ERROR_LOG")
+		if [ -n "$direction" ]; then
+			case "$direction" in
+				input|output)
+					print_result PASS "Pin $pin_with_parent parent-device[$i]: direction=$direction (valid)"
+					;;
+				*)
+					print_result FAIL "Pin $pin_with_parent parent-device[$i]: direction=$direction (invalid)"
+					;;
+			esac
+		fi
+
+		# Test 5: phase-offset attribute (if present)
+		local phase_offset=$(echo "$parent_device" | jq -r '.["phase-offset"] // empty' 2>> "$ERROR_LOG")
+		if [ -n "$phase_offset" ]; then
+			if [[ "$phase_offset" =~ ^-?[0-9]+$ ]]; then
+				print_result PASS "Pin $pin_with_parent parent-device[$i]: phase-offset=$phase_offset (valid s64)"
+			else
+				print_result FAIL "Pin $pin_with_parent parent-device[$i]: phase-offset=$phase_offset (not s64)"
+			fi
+		fi
+
+		# Only test first parent-device to avoid excessive output
+		if [ $i -eq 0 ]; then
+			# Test 6: Compare with Python CLI
+			if [ -n "$PYTHON_CLI" ]; then
+				local python_output="$TEST_DIR/python_pin_${pin_with_parent}_parent.json"
+				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_with_parent}" --output-json > "$python_output" 2>&1 || true
+
+				if ! dpll_python_has_error "$python_output"; then
+					local parent_device_python=$(jq -c ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id)" "$python_output" 2>/dev/null)
+					if [ -n "$parent_device_python" ]; then
+						# Compare state if present
+						if [ -n "$state" ]; then
+							local state_python=$(echo "$parent_device_python" | jq -r '.state // empty')
+							if [ "$state" = "$state_python" ]; then
+								print_result PASS "Pin $pin_with_parent parent-device[$i]: state matches Python CLI"
+							else
+								print_result FAIL "Pin $pin_with_parent parent-device[$i]: state mismatch (dpll=$state, python=$state_python)"
+							fi
+						fi
+
+						# Compare prio if present
+						if [ -n "$prio" ]; then
+							local prio_python=$(echo "$parent_device_python" | jq -r '.prio // empty')
+							if [ "$prio" = "$prio_python" ]; then
+								print_result PASS "Pin $pin_with_parent parent-device[$i]: prio matches Python CLI"
+							else
+								print_result FAIL "Pin $pin_with_parent parent-device[$i]: prio mismatch (dpll=$prio, python=$prio_python)"
+							fi
+						fi
+					fi
+				fi
+			fi
+		fi
+	done
 
 	echo ""
 }
@@ -3301,11 +3714,15 @@ main() {
 	test_device_mode_operations
 	test_device_lock_status
 	test_device_temperature
+	test_phase_offset_monitoring
 	test_pin_operations
 	test_pin_id_get
 	test_pin_state_operations
+	test_pin_type_validation
 	test_pin_frequency_change
 	test_pin_priority_capability
+	test_pin_capabilities_detailed
+	test_parent_device_attributes
 	test_parent_operations
 	test_reference_sync
 	test_monitor
