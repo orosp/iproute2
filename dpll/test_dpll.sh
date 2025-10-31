@@ -679,6 +679,11 @@ dpll_python_has_error() {
 dpll_has_error() {
 	local output_file="$1"
 
+	# Check if file doesn't exist or is empty
+	if [ ! -s "$output_file" ]; then
+		return 0
+	fi
+
 	# Check for error message
 	if grep -q "Failed to get\|Failed to dump" "$output_file" 2>/dev/null; then
 		return 0
