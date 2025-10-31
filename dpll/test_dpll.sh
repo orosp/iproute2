@@ -185,6 +185,416 @@ print_result() {
 	esac
 }
 
+#==============================================================================
+# DPLL Test API - Deklarativní rozhraní pro psaní test cases
+#==============================================================================
+
+# Cache pro device/pin data - zkracuje opakované dotazy
+declare -A DPLL_DEVICE_CACHE
+declare -A DPLL_PIN_CACHE
+DPLL_CACHE_VALID=0
+
+# Invaliduje cache (voláno po SET operacích)
+dpll_invalidate_cache() {
+	DPLL_DEVICE_CACHE=()
+	DPLL_PIN_CACHE=()
+	DPLL_CACHE_VALID=0
+}
+
+# Načte všechna zařízení do cache
+dpll_load_devices() {
+	if [ $DPLL_CACHE_VALID -eq 1 ] && [ ${#DPLL_DEVICE_CACHE[@]} -gt 0 ]; then
+		return 0
+	fi
+
+	local json_file="$TEST_DIR/dpll_cache_devices.json"
+	$DPLL_TOOL -j device show > "$json_file" 2>> "$ERROR_LOG" || return 1
+
+	if ! command -v jq >> "$ERROR_LOG" 2>&1; then
+		return 1
+	fi
+
+	local device_count=$(jq -r '.device | length' "$json_file" 2>> "$ERROR_LOG" || echo 0)
+	if [ "$device_count" -eq 0 ]; then
+		return 1
+	fi
+
+	for ((i=0; i<device_count; i++)); do
+		local device_json=$(jq -c ".device[$i]" "$json_file" 2>> "$ERROR_LOG")
+		local device_id=$(echo "$device_json" | jq -r '.id' 2>> "$ERROR_LOG")
+		DPLL_DEVICE_CACHE[$device_id]="$device_json"
+	done
+
+	DPLL_CACHE_VALID=1
+	return 0
+}
+
+# Načte všechny piny do cache
+dpll_load_pins() {
+	if [ $DPLL_CACHE_VALID -eq 1 ] && [ ${#DPLL_PIN_CACHE[@]} -gt 0 ]; then
+		return 0
+	fi
+
+	local json_file="$TEST_DIR/dpll_cache_pins.json"
+	$DPLL_TOOL -j pin show > "$json_file" 2>> "$ERROR_LOG" || return 1
+
+	if ! command -v jq >> "$ERROR_LOG" 2>&1; then
+		return 1
+	fi
+
+	local pin_count=$(jq -r '.pin | length' "$json_file" 2>> "$ERROR_LOG" || echo 0)
+	if [ "$pin_count" -eq 0 ]; then
+		return 1
+	fi
+
+	for ((i=0; i<pin_count; i++)); do
+		local pin_json=$(jq -c ".pin[$i]" "$json_file" 2>> "$ERROR_LOG")
+		local pin_id=$(echo "$pin_json" | jq -r '.id' 2>> "$ERROR_LOG")
+		DPLL_PIN_CACHE[$pin_id]="$pin_json"
+	done
+
+	DPLL_CACHE_VALID=1
+	return 0
+}
+
+# Najde device podle kritérií
+# Usage: dpll_find_device [--with-attr ATTR] [--attr-equals ATTR VALUE] [--random]
+# Returns: device ID nebo prázdný string
+dpll_find_device() {
+	dpll_load_devices || return 1
+
+	local with_attr=""
+	local attr_equals_name=""
+	local attr_equals_value=""
+	local random_mode=0
+
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+			--with-attr)
+				with_attr="$2"
+				shift 2
+				;;
+			--attr-equals)
+				attr_equals_name="$2"
+				attr_equals_value="$3"
+				shift 3
+				;;
+			--random)
+				random_mode=1
+				shift
+				;;
+			*)
+				shift
+				;;
+		esac
+	done
+
+	local matches=()
+	for device_id in "${!DPLL_DEVICE_CACHE[@]}"; do
+		local device_json="${DPLL_DEVICE_CACHE[$device_id]}"
+		local match=1
+
+		# Filter: --with-attr
+		if [ -n "$with_attr" ]; then
+			local has_attr=$(echo "$device_json" | jq -r "has(\"$with_attr\")" 2>> "$ERROR_LOG")
+			if [ "$has_attr" != "true" ]; then
+				match=0
+			fi
+		fi
+
+		# Filter: --attr-equals
+		if [ -n "$attr_equals_name" ] && [ $match -eq 1 ]; then
+			local attr_value=$(echo "$device_json" | jq -r ".\"$attr_equals_name\" // empty" 2>> "$ERROR_LOG")
+			if [ "$attr_value" != "$attr_equals_value" ]; then
+				match=0
+			fi
+		fi
+
+		if [ $match -eq 1 ]; then
+			matches+=("$device_id")
+		fi
+	done
+
+	if [ ${#matches[@]} -eq 0 ]; then
+		return 1
+	fi
+
+	if [ $random_mode -eq 1 ]; then
+		local idx=$((RANDOM % ${#matches[@]}))
+		echo "${matches[$idx]}"
+	else
+		echo "${matches[0]}"
+	fi
+
+	return 0
+}
+
+# Najde pin podle kritérií
+# Usage: dpll_find_pin [--with-attr ATTR] [--with-capability CAP] [--attr-equals ATTR VALUE] [--random]
+# Returns: pin ID nebo prázdný string
+dpll_find_pin() {
+	dpll_load_pins || return 1
+
+	local with_attr=""
+	local with_capability=""
+	local attr_equals_name=""
+	local attr_equals_value=""
+	local random_mode=0
+
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+			--with-attr)
+				with_attr="$2"
+				shift 2
+				;;
+			--with-capability)
+				with_capability="$2"
+				shift 2
+				;;
+			--attr-equals)
+				attr_equals_name="$2"
+				attr_equals_value="$3"
+				shift 3
+				;;
+			--random)
+				random_mode=1
+				shift
+				;;
+			*)
+				shift
+				;;
+		esac
+	done
+
+	local matches=()
+	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
+		local pin_json="${DPLL_PIN_CACHE[$pin_id]}"
+		local match=1
+
+		# Filter: --with-attr
+		if [ -n "$with_attr" ]; then
+			local has_attr=$(echo "$pin_json" | jq -r "has(\"$with_attr\")" 2>> "$ERROR_LOG")
+			if [ "$has_attr" != "true" ]; then
+				match=0
+			fi
+		fi
+
+		# Filter: --with-capability
+		if [ -n "$with_capability" ] && [ $match -eq 1 ]; then
+			local has_cap=$(echo "$pin_json" | jq -r ".capabilities | contains([\"$with_capability\"])" 2>> "$ERROR_LOG")
+			if [ "$has_cap" != "true" ]; then
+				match=0
+			fi
+		fi
+
+		# Filter: --attr-equals
+		if [ -n "$attr_equals_name" ] && [ $match -eq 1 ]; then
+			local attr_value=$(echo "$pin_json" | jq -r ".\"$attr_equals_name\" // empty" 2>> "$ERROR_LOG")
+			if [ "$attr_value" != "$attr_equals_value" ]; then
+				match=0
+			fi
+		fi
+
+		if [ $match -eq 1 ]; then
+			matches+=("$pin_id")
+		fi
+	done
+
+	if [ ${#matches[@]} -eq 0 ]; then
+		return 1
+	fi
+
+	if [ $random_mode -eq 1 ]; then
+		local idx=$((RANDOM % ${#matches[@]}))
+		echo "${matches[$idx]}"
+	else
+		echo "${matches[0]}"
+	fi
+
+	return 0
+}
+
+# Získá atribut device z cache
+# Usage: dpll_get_device_attr DEVICE_ID ATTR_NAME
+dpll_get_device_attr() {
+	local device_id="$1"
+	local attr_name="$2"
+
+	dpll_load_devices || return 1
+
+	if [ -z "${DPLL_DEVICE_CACHE[$device_id]}" ]; then
+		return 1
+	fi
+
+	echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r ".\"$attr_name\" // empty" 2>> "$ERROR_LOG"
+	return 0
+}
+
+# Získá atribut pin z cache
+# Usage: dpll_get_pin_attr PIN_ID ATTR_NAME [NESTED_PATH]
+# Example: dpll_get_pin_attr 5 "prio" "parent-device[0]"
+dpll_get_pin_attr() {
+	local pin_id="$1"
+	local attr_name="$2"
+	local nested_path="${3:-}"
+
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		return 1
+	fi
+
+	if [ -n "$nested_path" ]; then
+		echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"$nested_path\".\"$attr_name\" // empty" 2>> "$ERROR_LOG"
+	else
+		echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"$attr_name\" // empty" 2>> "$ERROR_LOG"
+	fi
+	return 0
+}
+
+# Provede SET operaci na device
+# Usage: dpll_device_set DEVICE_ID ATTR VALUE [ATTR2 VALUE2 ...]
+dpll_device_set() {
+	local device_id="$1"
+	shift
+
+	local cmd="$DPLL_TOOL device set id $device_id"
+	while [[ $# -gt 0 ]]; do
+		cmd="$cmd $1 $2"
+		shift 2
+	done
+
+	local output_file="$TEST_DIR/dpll_set_device_${device_id}_$$.txt"
+	if $cmd > "$output_file" 2>&1; then
+		dpll_invalidate_cache
+		return 0
+	else
+		return 1
+	fi
+}
+
+# Provede SET operaci na pin
+# Usage: dpll_pin_set PIN_ID ATTR VALUE [ATTR2 VALUE2 ...]
+dpll_pin_set() {
+	local pin_id="$1"
+	shift
+
+	local cmd="$DPLL_TOOL pin set id $pin_id"
+	while [[ $# -gt 0 ]]; do
+		cmd="$cmd $1 $2"
+		shift 2
+	done
+
+	local output_file="$TEST_DIR/dpll_set_pin_${pin_id}_$$.txt"
+	if $cmd > "$output_file" 2>&1; then
+		dpll_invalidate_cache
+		return 0
+	else
+		return 1
+	fi
+}
+
+# Asserce: ověří rovnost hodnot
+# Usage: dpll_assert_equals "test name" "expected" "actual"
+dpll_assert_equals() {
+	local test_name="$1"
+	local expected="$2"
+	local actual="$3"
+
+	if [ "$expected" = "$actual" ]; then
+		print_result PASS "$test_name"
+		return 0
+	else
+		print_result FAIL "$test_name (expected: $expected, got: $actual)"
+		return 1
+	fi
+}
+
+# Assert: ověří že hodnota obsahuje substring
+# Usage: dpll_assert_contains "test name" "haystack" "needle"
+dpll_assert_contains() {
+	local test_name="$1"
+	local haystack="$2"
+	local needle="$3"
+
+	if [[ "$haystack" == *"$needle"* ]]; then
+		print_result PASS "$test_name"
+		return 0
+	else
+		print_result FAIL "$test_name (expected to contain: $needle, got: $haystack)"
+		return 1
+	fi
+}
+
+# Assert: ověří že hodnota není prázdná
+# Usage: dpll_assert_not_empty "test name" "value"
+dpll_assert_not_empty() {
+	local test_name="$1"
+	local value="$2"
+
+	if [ -n "$value" ]; then
+		print_result PASS "$test_name"
+		return 0
+	else
+		print_result FAIL "$test_name (value is empty)"
+		return 1
+	fi
+}
+
+# Deklarativní test case pro pin frequency change
+# Usage: dpll_test_pin_freq_change
+dpll_test_pin_freq_change() {
+	local pin_id=$(dpll_find_pin --with-attr "frequency-supported" --with-capability "frequency-can-change")
+
+	if [ -z "$pin_id" ]; then
+		print_result SKIP "Pin frequency change (no suitable pin found)"
+		return 0
+	fi
+
+	local current_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
+	dpll_assert_not_empty "Pin $pin_id has current frequency" "$current_freq" || return 1
+
+	# Get alternative frequency
+	local freq_min=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
+	if [ -z "$freq_min" ]; then
+		print_result SKIP "Pin $pin_id frequency change (no alternative frequency)"
+		return 0
+	fi
+
+	# Set new frequency
+	if dpll_pin_set "$pin_id" frequency "$freq_min"; then
+		local new_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
+		dpll_assert_equals "Pin $pin_id frequency changed to $freq_min" "$freq_min" "$new_freq"
+
+		# Restore original frequency
+		dpll_pin_set "$pin_id" frequency "$current_freq" >> "$ERROR_LOG" 2>&1
+	else
+		print_result FAIL "Pin $pin_id frequency change (set command failed)"
+		return 1
+	fi
+}
+
+# Deklarativní test case pro device attribute read
+# Usage: dpll_test_device_has_attrs
+dpll_test_device_has_attrs() {
+	local device_id=$(dpll_find_device --random)
+
+	if [ -z "$device_id" ]; then
+		print_result SKIP "Device attribute test (no devices found)"
+		return 0
+	fi
+
+	local module_name=$(dpll_get_device_attr "$device_id" "module-name")
+	dpll_assert_not_empty "Device $device_id has module-name" "$module_name"
+
+	local clock_id=$(dpll_get_device_attr "$device_id" "clock-id")
+	dpll_assert_not_empty "Device $device_id has clock-id" "$clock_id"
+}
+
+#==============================================================================
+# End of DPLL Test API
+#==============================================================================
+
 # Check if command exists
 check_command() {
 	if ! command -v "$1" &> /dev/null; then
@@ -2693,11 +3103,52 @@ print_banner() {
 	echo ""
 }
 
+# Declarative API demo tests
+test_dpll_api_demo() {
+	print_header "Testing DPLL API (Declarative Test Cases)"
+
+	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
+		print_result SKIP "DPLL API demo tests (SET operations disabled)"
+		echo ""
+		return
+	fi
+
+	# Demo 1: Device attribute test using API
+	dpll_test_device_has_attrs
+
+	# Demo 2: Pin frequency change using API
+	dpll_test_pin_freq_change
+
+	# Demo 3: Custom test using API primitives
+	local pin_id=$(dpll_find_pin --with-capability "state-can-change" --random)
+	if [ -n "$pin_id" ]; then
+		local board_label=$(dpll_get_pin_attr "$pin_id" "board-label")
+		dpll_assert_not_empty "Pin $pin_id has board-label" "$board_label"
+	else
+		print_result SKIP "Custom API test (no pin with state-can-change)"
+	fi
+
+	# Demo 4: Multiple attribute query
+	local device_id=$(dpll_find_device --with-attr "mode")
+	if [ -n "$device_id" ]; then
+		local mode=$(dpll_get_device_attr "$device_id" "mode")
+		dpll_assert_not_empty "Device $device_id has mode attribute" "$mode"
+
+		local lock_status=$(dpll_get_device_attr "$device_id" "lock-status")
+		dpll_assert_not_empty "Device $device_id has lock-status" "$lock_status"
+	else
+		print_result SKIP "Device mode test (no device with mode)"
+	fi
+
+	echo ""
+}
+
 # Main test execution
 main() {
 	print_banner
 
 	check_prerequisites
+	test_dpll_api_demo
 	test_help
 	test_version
 	test_device_operations
