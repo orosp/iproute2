@@ -511,6 +511,30 @@ static const char *dpll_lock_status_error_name(__u32 error)
 	}
 }
 
+static const char *dpll_clock_quality_level_name(__u32 level)
+{
+	switch (level) {
+	case DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_PRC:
+		return "itu-opt1-prc";
+	case DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_SSU_A:
+		return "itu-opt1-ssu-a";
+	case DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_SSU_B:
+		return "itu-opt1-ssu-b";
+	case DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_EEC1:
+		return "itu-opt1-eec1";
+	case DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_PRTC:
+		return "itu-opt1-prtc";
+	case DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_EPRTC:
+		return "itu-opt1-eprtc";
+	case DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_EEEC:
+		return "itu-opt1-eeec";
+	case DPLL_CLOCK_QUALITY_LEVEL_ITU_OPT1_EPRC:
+		return "itu-opt1-eprc";
+	default:
+		return "unknown";
+	}
+}
+
 /* Netlink attribute parsing callbacks */
 static int attr_cb(const struct nlattr *attr, void *data)
 {
@@ -537,7 +561,7 @@ static int attr_pin_cb(const struct nlattr *attr, void *data)
 }
 
 /* Device printing from netlink attributes */
-static void dpll_device_print_attrs(struct nlattr **tb)
+static void dpll_device_print_attrs(const struct nlmsghdr *nlh, struct nlattr **tb)
 {
 	DPLL_PR_UINT_FMT(tb, DPLL_A_ID, "id", "device id %u:\n");
 
@@ -561,6 +585,43 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 
 	DPLL_PR_ENUM_STR(tb, DPLL_A_LOCK_STATUS_ERROR, "lock-status-error", dpll_lock_status_error_name);
 
+	/* Handle clock-quality-level - spec defines as type: u32, multi-attr: true */
+	if (nlh) {
+		struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+		struct nlattr *attr;
+		bool first = true;
+
+		mnl_attr_for_each(attr, nlh, sizeof(*genl)) {
+			if (mnl_attr_get_type(attr) == DPLL_A_CLOCK_QUALITY_LEVEL) {
+				__u32 level = mnl_attr_get_u32(attr);
+
+				if (first) {
+					if (is_json_context()) {
+						open_json_array(PRINT_JSON, "clock-quality-level");
+					} else {
+						pr_out("  clock-quality-level:");
+					}
+					first = false;
+				}
+
+				if (is_json_context()) {
+					print_string(PRINT_JSON, NULL, NULL,
+						     dpll_clock_quality_level_name(level));
+				} else {
+					pr_out(" %s", dpll_clock_quality_level_name(level));
+				}
+			}
+		}
+
+		if (!first) {
+			if (is_json_context()) {
+				close_json_array(PRINT_JSON, NULL);
+			} else {
+				pr_out("\n");
+			}
+		}
+	}
+
 	if (tb[DPLL_A_TEMP]) {
 		__s32 temp = mnl_attr_get_u32(tb[DPLL_A_TEMP]);
 		if (is_json_context()) {
@@ -574,15 +635,39 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 	}
 
 	/* Handle mode-supported - spec defines as type: u32, multi-attr: true */
-	if (tb[DPLL_A_MODE_SUPPORTED]) {
-		__u32 mode = mnl_attr_get_u32(tb[DPLL_A_MODE_SUPPORTED]);
+	if (nlh) {
+		struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+		struct nlattr *attr;
+		bool first = true;
 
-		if (is_json_context()) {
-			open_json_array(PRINT_JSON, "mode-supported");
-			print_string(PRINT_JSON, NULL, NULL, dpll_mode_name(mode));
-			close_json_array(PRINT_JSON, NULL);
-		} else {
-			pr_out("  mode-supported: %s\n", dpll_mode_name(mode));
+		mnl_attr_for_each(attr, nlh, sizeof(*genl)) {
+			if (mnl_attr_get_type(attr) == DPLL_A_MODE_SUPPORTED) {
+				__u32 mode = mnl_attr_get_u32(attr);
+
+				if (first) {
+					if (is_json_context()) {
+						open_json_array(PRINT_JSON, "mode-supported");
+					} else {
+						pr_out("  mode-supported:");
+					}
+					first = false;
+				}
+
+				if (is_json_context()) {
+					print_string(PRINT_JSON, NULL, NULL,
+						     dpll_mode_name(mode));
+				} else {
+					pr_out(" %s", dpll_mode_name(mode));
+				}
+			}
+		}
+
+		if (!first) {
+			if (is_json_context()) {
+				close_json_array(PRINT_JSON, NULL);
+			} else {
+				pr_out("\n");
+			}
 		}
 	}
 
@@ -603,7 +688,7 @@ static int cmd_device_show_cb(const struct nlmsghdr *nlh, void *data)
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
 
 	mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
-	dpll_device_print_attrs(tb);
+	dpll_device_print_attrs(nlh, tb);
 
 	return MNL_CB_OK;
 }
@@ -617,7 +702,7 @@ static int cmd_device_show_dump_cb(const struct nlmsghdr *nlh, void *data)
 	mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
 
 	open_json_object(NULL);
-	dpll_device_print_attrs(tb);
+	dpll_device_print_attrs(nlh, tb);
 	close_json_object();
 
 	return MNL_CB_OK;
@@ -1759,7 +1844,7 @@ static int cmd_monitor_cb(const struct nlmsghdr *nlh, void *data)
 		struct nlattr *tb[DPLL_A_MAX + 1] = {};
 		mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
 		pr_out("[%s] ", cmd_name);
-		dpll_device_print_attrs(tb);
+		dpll_device_print_attrs(nlh, tb);
 		break;
 	}
 	case DPLL_CMD_PIN_CREATE_NTF:
