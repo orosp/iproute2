@@ -505,7 +505,7 @@ static const char *dpll_lock_status_error_name(__u32 error)
 	case DPLL_LOCK_STATUS_ERROR_MEDIA_DOWN:
 		return "media-down";
 	case DPLL_LOCK_STATUS_ERROR_FRACTIONAL_FREQUENCY_OFFSET_TOO_HIGH:
-		return "ffo-too-high";
+		return "fractional-frequency-offset-too-high";
 	default:
 		return "unknown";
 	}
@@ -590,7 +590,7 @@ static void dpll_device_print_attrs(struct nlattr **tb)
 		__u32 value = mnl_attr_get_u32(tb[DPLL_A_PHASE_OFFSET_MONITOR]);
 		print_string(PRINT_ANY, "phase-offset-monitor",
 			     "  phase-offset-monitor: %s\n",
-			     value ? "enabled" : "disabled");
+			     value ? "enable" : "disable");
 	}
 
 	DPLL_PR_UINT(tb, DPLL_A_PHASE_OFFSET_AVG_FACTOR, "phase-offset-avg-factor");
