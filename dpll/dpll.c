@@ -905,20 +905,16 @@ static void cmd_pin_help(void)
 {
 	pr_err("Usage: dpll pin show [ id PIN_ID ] [ device DEVICE_ID ]\n");
 	pr_err("       dpll pin set id PIN_ID [ frequency FREQ ]\n");
-	pr_err("                               [ direction { input | output } ]\n");
-	pr_err("                               [ prio PRIO ]\n");
-	pr_err("                               [ state { connected | disconnected | selectable } ]\n");
-	pr_err("                               [ parent-device DEVICE_ID [ direction DIR ]\n");
-	pr_err("                                                          [ prio PRIO ]\n");
-	pr_err("                                                          [ state STATE ] ]\n");
-	pr_err("                               [ parent-pin PIN_ID [ state STATE ] ]\n");
-	pr_err("                               [ phase-adjust-gran GRAN ]\n");
-	pr_err("                               [ phase-adjust ADJUST ]\n");
-	pr_err("                               [ esync-frequency FREQ ]\n");
-	pr_err("                               [ reference-sync PIN_ID [ state STATE ] ]\n");
+	pr_err("                              [ phase-adjust ADJUST ]\n");
+	pr_err("                              [ esync-frequency FREQ ]\n");
+	pr_err("                              [ parent-device DEVICE_ID [ direction DIR ]\n");
+	pr_err("                                                        [ prio PRIO ]\n");
+	pr_err("                                                        [ state STATE ] ]\n");
+	pr_err("                              [ parent-pin PIN_ID [ state STATE ] ]\n");
+	pr_err("                              [ reference-sync PIN_ID [ state STATE ] ]\n");
 	pr_err("       dpll pin id-get [ module-name NAME ] [ clock-id ID ]\n");
-	pr_err("                        [ board-label LABEL ] [ panel-label LABEL ]\n");
-	pr_err("                        [ package-label LABEL ] [ type TYPE ]\n");
+	pr_err("                       [ board-label LABEL ] [ panel-label LABEL ]\n");
+	pr_err("                       [ package-label LABEL ] [ type TYPE ]\n");
 }
 
 static const char *dpll_pin_type_name(__u32 type)
@@ -1595,17 +1591,6 @@ static int cmd_pin_set(struct dpll *dpll)
 			has_id = true;
 		} else if (dpll_argv_match(dpll, "frequency")) {
 			DPLL_PARSE_ATTR_U64(dpll, nlh, "frequency", DPLL_A_PIN_FREQUENCY);
-		} else if (dpll_argv_match(dpll, "prio")) {
-			DPLL_PARSE_ATTR_U32(dpll, nlh, "prio", DPLL_A_PIN_PRIO);
-		} else if (dpll_argv_match(dpll, "direction")) {
-			DPLL_PARSE_ATTR_ENUM(dpll, nlh, "direction", DPLL_A_PIN_DIRECTION,
-					     dpll_parse_direction);
-		} else if (dpll_argv_match(dpll, "state")) {
-			DPLL_PARSE_ATTR_ENUM(dpll, nlh, "state", DPLL_A_PIN_STATE,
-					     dpll_parse_state);
-		} else if (dpll_argv_match(dpll, "phase-adjust-gran")) {
-			DPLL_PARSE_ATTR_S32(dpll, nlh, "phase-adjust-gran",
-					    DPLL_A_PIN_PHASE_ADJUST_GRAN);
 		} else if (dpll_argv_match(dpll, "phase-adjust")) {
 			DPLL_PARSE_ATTR_S32(dpll, nlh, "phase-adjust", DPLL_A_PIN_PHASE_ADJUST);
 		} else if (dpll_argv_match(dpll, "esync-frequency")) {
