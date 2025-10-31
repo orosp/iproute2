@@ -2124,11 +2124,18 @@ test_pin_frequency_change() {
 		return
 	fi
 
-	# Find pin with frequency-supported and frequency-can-change capability
-	local pin_id=$(dpll_find_pin --with-attr "frequency-supported" --with-capability "frequency-can-change")
+	# Find pin with frequency-supported (note: frequency-can-change capability doesn't exist in DPLL spec)
+	local pin_id=$(dpll_find_pin --with-attr "frequency-supported")
 
 	if [ -z "$pin_id" ]; then
-		print_result SKIP "Pin frequency change (no suitable pin found)"
+		print_result SKIP "Pin frequency change (no pin with frequency-supported)"
+		echo ""
+		return
+	fi
+
+	# Verify pin also has current frequency
+	if ! dpll_pin_has_attr "$pin_id" "frequency"; then
+		print_result SKIP "Pin $pin_id frequency change (no frequency attribute)"
 		echo ""
 		return
 	fi
@@ -2332,9 +2339,10 @@ test_pin_capabilities_detailed() {
 
 			for cap in $capabilities; do
 				capability_count=$((capability_count + 1))
-				# Validate capability is one of valid enum values
+				# Validate capability is one of valid enum values (per DPLL spec)
+				# Note: frequency-can-change is NOT in spec, only these 3:
 				case "$cap" in
-					direction-can-change|priority-can-change|state-can-change|frequency-can-change)
+					direction-can-change|priority-can-change|state-can-change)
 						print_result PASS "Pin $pin_id has valid capability: $cap"
 						;;
 					*)
@@ -2388,21 +2396,8 @@ test_pin_capabilities_detailed() {
 			fi
 		fi
 
-		# Test frequency-can-change capability
-		local pin_with_freq_cap=$(dpll_find_pin --with-capability "frequency-can-change")
-		if [ -n "$pin_with_freq_cap" ] && dpll_pin_has_attr "$pin_with_freq_cap" "frequency-supported"; then
-			local supported_freqs=$(echo "${DPLL_PIN_CACHE[$pin_with_freq_cap]}" | jq -r '.["frequency-supported"][]' 2>> "$ERROR_LOG" | head -2)
-			local freq_count=$(echo "$supported_freqs" | wc -l)
-
-			if [ "$freq_count" -ge 2 ]; then
-				local first_freq=$(echo "$supported_freqs" | head -1)
-				if dpll_pin_set_and_verify "$pin_with_freq_cap" "frequency" "$first_freq"; then
-					print_result PASS "Pin $pin_with_freq_cap with frequency-can-change: frequency SET works"
-				else
-					print_result FAIL "Pin $pin_with_freq_cap with frequency-can-change: frequency SET failed"
-				fi
-			fi
-		fi
+		# Note: frequency-can-change capability doesn't exist in DPLL spec
+		# Frequency SET operations are tested in test_pin_frequency_change()
 	else
 		print_result SKIP "Capability consistency verification (read-only mode, use --enable-set)"
 	fi
