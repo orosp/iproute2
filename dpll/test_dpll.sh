@@ -2131,57 +2131,88 @@ test_pin_frequency_change() {
 		return
 	fi
 
-	# Find pin with frequency-supported (note: frequency-can-change capability doesn't exist in DPLL spec)
-	local pin_id=$(dpll_find_pin --with-attr "frequency-supported")
+	dpll_load_pins || return
 
-	if [ -z "$pin_id" ]; then
-		print_result SKIP "Pin frequency change (no pin with frequency-supported)"
-		echo ""
-		return
-	fi
+	local tested_pins=0
+	local pass_count=0
 
-	# Verify pin also has current frequency
-	if ! dpll_pin_has_attr "$pin_id" "frequency"; then
-		print_result SKIP "Pin $pin_id frequency change (no frequency attribute)"
-		echo ""
-		return
-	fi
-
-	# Get current frequency
-	local current_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
-	if [ -z "$current_freq" ]; then
-		print_result SKIP "Pin $pin_id frequency change (no current frequency)"
-		echo ""
-		return
-	fi
-
-	# Find alternative frequency (try second supported frequency)
-	local target_freq=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
-
-	if [ -z "$target_freq" ]; then
-		print_result SKIP "Pin $pin_id frequency change (no alternative frequency)"
-		echo ""
-		return
-	fi
-
-	# Perform frequency change test
-	local test_name="Pin $pin_id frequency change $current_freq -> $target_freq"
-
-	if dpll_pin_set "$pin_id" frequency "$target_freq"; then
-		# Verify the change
-		local new_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
-
-		if [ "$new_freq" = "$target_freq" ]; then
-			print_result PASS "$test_name"
-			echo -e "  ${GREEN}✓${NC} Frequency successfully changed and verified"
-		else
-			print_result FAIL "$test_name (expected: $target_freq, got: $new_freq)"
+	# Test all pins with frequency attribute
+	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
+		if ! dpll_pin_has_attr "$pin_id" "frequency"; then
+			continue
 		fi
 
-		# Restore original frequency
-		dpll_pin_set "$pin_id" frequency "$current_freq" >> "$ERROR_LOG" 2>&1
+		local current_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
+		if [ -z "$current_freq" ]; then
+			continue
+		fi
+
+		tested_pins=$((tested_pins + 1))
+
+		# Check if pin has frequency-supported (determines if change is possible)
+		if ! dpll_pin_has_attr "$pin_id" "frequency-supported"; then
+			# Pin WITHOUT frequency-supported: frequency change should FAIL
+			local invalid_freq=999999999
+			local test_name="Pin $pin_id frequency change (should reject - no frequency-supported)"
+
+			if dpll_pin_set "$pin_id" frequency "$invalid_freq" 2>> "$ERROR_LOG"; then
+				# Command succeeded when it should have failed
+				print_result FAIL "$test_name (incorrectly accepted change)"
+			else
+				# Command failed as expected
+				print_result PASS "$test_name (correctly rejected)"
+				pass_count=$((pass_count + 1))
+			fi
+			continue
+		fi
+
+		# Pin WITH frequency-supported: try to change to supported frequency
+		local supported_count=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"] | length' 2>> "$ERROR_LOG")
+
+		if [ "$supported_count" -lt 2 ]; then
+			# Only one frequency supported, can't test change
+			print_result SKIP "Pin $pin_id frequency change (only 1 frequency supported)"
+			continue
+		fi
+
+		# Get alternative frequency (try second in list)
+		local target_freq=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
+
+		if [ -z "$target_freq" ] || [ "$target_freq" = "$current_freq" ]; then
+			# Try first frequency if second doesn't work
+			target_freq=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][0]."frequency-min" // empty' 2>> "$ERROR_LOG")
+		fi
+
+		if [ -z "$target_freq" ]; then
+			print_result SKIP "Pin $pin_id frequency change (no valid target frequency)"
+			continue
+		fi
+
+		# Perform frequency change test
+		local test_name="Pin $pin_id frequency change $current_freq -> $target_freq"
+
+		if dpll_pin_set "$pin_id" frequency "$target_freq"; then
+			# Verify the change
+			local new_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
+
+			if [ "$new_freq" = "$target_freq" ]; then
+				print_result PASS "$test_name"
+				pass_count=$((pass_count + 1))
+			else
+				print_result FAIL "$test_name (expected: $target_freq, got: $new_freq)"
+			fi
+
+			# Restore original frequency
+			dpll_pin_set "$pin_id" frequency "$current_freq" >> "$ERROR_LOG" 2>&1
+		else
+			print_result FAIL "$test_name (set command failed)"
+		fi
+	done
+
+	if [ $tested_pins -eq 0 ]; then
+		print_result SKIP "Pin frequency change (no pins with frequency attribute)"
 	else
-		print_result FAIL "$test_name (set command failed)"
+		print_result PASS "Tested frequency change on $tested_pins pins ($pass_count passed)"
 	fi
 
 	echo ""
