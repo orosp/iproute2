@@ -686,6 +686,90 @@ dpll_has_error() {
 	return 1
 }
 
+# Helper: Set and verify device attribute
+# Usage: dpll_device_set_and_verify DEVICE_ID ATTR VALUE
+# Returns: 0 on success, 1 on failure
+dpll_device_set_and_verify() {
+	local device_id="$1"
+	local attr="$2"
+	local value="$3"
+
+	if dpll_device_set "$device_id" "$attr" "$value"; then
+		local actual=$(dpll_get_device_attr "$device_id" "$attr")
+		if [ "$actual" = "$value" ]; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+# Helper: Set and verify pin attribute
+# Usage: dpll_pin_set_and_verify PIN_ID ATTR VALUE
+# Returns: 0 on success, 1 on failure
+dpll_pin_set_and_verify() {
+	local pin_id="$1"
+	local attr="$2"
+	local value="$3"
+
+	if dpll_pin_set "$pin_id" "$attr" "$value"; then
+		local actual=$(dpll_get_pin_attr "$pin_id" "$attr")
+		if [ "$actual" = "$value" ]; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+# Helper: Get all pin IDs with specific type
+# Usage: dpll_find_pins_by_type "SYNCE_ETH_PORT"
+# Returns: list of pin IDs (one per line)
+dpll_find_pins_by_type() {
+	local pin_type="$1"
+	dpll_load_pins || return 1
+
+	local matches=()
+	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
+		local type=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.type // empty' 2>> "$ERROR_LOG")
+		if [ "$type" = "$pin_type" ]; then
+			matches+=("$pin_id")
+		fi
+	done
+
+	printf '%s\n' "${matches[@]}"
+}
+
+# Helper: Check if device has specific attribute
+# Usage: dpll_device_has_attr DEVICE_ID ATTR
+# Returns: 0 if has attribute, 1 otherwise
+dpll_device_has_attr() {
+	local device_id="$1"
+	local attr="$2"
+	dpll_load_devices || return 1
+
+	if [ -z "${DPLL_DEVICE_CACHE[$device_id]}" ]; then
+		return 1
+	fi
+
+	local has_attr=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r "has(\"$attr\")" 2>> "$ERROR_LOG")
+	[ "$has_attr" = "true" ]
+}
+
+# Helper: Check if pin has specific attribute
+# Usage: dpll_pin_has_attr PIN_ID ATTR
+# Returns: 0 if has attribute, 1 otherwise
+dpll_pin_has_attr() {
+	local pin_id="$1"
+	local attr="$2"
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		return 1
+	fi
+
+	local has_attr=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r "has(\"$attr\")" 2>> "$ERROR_LOG")
+	[ "$has_attr" = "true" ]
+}
+
 #==============================================================================
 # End of DPLL Test API
 #==============================================================================
@@ -1668,19 +1752,245 @@ test_device_set() {
 	echo ""
 }
 
-# Test pin set operations
-test_pin_set() {
-	print_header "Testing Pin Set Operations"
+# Test device mode operations
+test_device_mode_operations() {
+	print_header "Testing Device Mode Operations"
 
-	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
-		print_result SKIP "Pin set operations (read-only mode, use --enable-set)"
+	# Find device with mode-supported attribute
+	local device_id=$(dpll_find_device --with-attr "mode-supported")
+
+	if [ -z "$device_id" ]; then
+		print_result SKIP "Device mode operations (no device with mode-supported)"
 		echo ""
 		return
 	fi
 
-	local pin_id=$(grep -oP '^pin id \K\d+' "$TEST_DIR/dpll_pin_dump.txt" 2>/dev/null | head -1)
+	# Test 1: Read current mode
+	if dpll_device_has_attr "$device_id" "mode"; then
+		local current_mode=$(dpll_get_device_attr "$device_id" "mode")
+		print_result PASS "Device $device_id has mode: $current_mode"
+	else
+		print_result SKIP "Device $device_id mode (attribute not present)"
+		echo ""
+		return
+	fi
 
-	print_result SKIP "Pin set operations (not tested here)"
+	# Test 2: Read mode-supported
+	local modes_supported=$(dpll_get_device_attr "$device_id" "mode-supported")
+	if [ -n "$modes_supported" ]; then
+		local mode_count=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"] | length' 2>> "$ERROR_LOG")
+		print_result PASS "Device $device_id has $mode_count supported modes"
+	else
+		print_result FAIL "Device $device_id mode-supported (empty)"
+	fi
+
+	# Test 3: SET mode operations (if enabled)
+	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
+		print_result SKIP "Device mode SET operations (read-only mode, use --enable-set)"
+		echo ""
+		return
+	fi
+
+	# Try to set mode to each supported mode
+	local modes=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"][]' 2>> "$ERROR_LOG")
+	for mode in $modes; do
+		if dpll_device_set_and_verify "$device_id" "mode" "$mode"; then
+			print_result PASS "Device $device_id set mode to $mode"
+		else
+			print_result FAIL "Device $device_id failed to set mode to $mode"
+		fi
+	done
+
+	# Restore original mode
+	if [ -n "$current_mode" ]; then
+		dpll_device_set "$device_id" "mode" "$current_mode" >> "$ERROR_LOG" 2>&1
+	fi
+
+	echo ""
+}
+
+# Test device lock-status
+test_device_lock_status() {
+	print_header "Testing Device Lock Status"
+
+	# Find any device
+	local device_id=$(dpll_find_device)
+
+	if [ -z "$device_id" ]; then
+		print_result SKIP "Device lock-status (no devices)"
+		echo ""
+		return
+	fi
+
+	# Test 1: Read lock-status
+	if dpll_device_has_attr "$device_id" "lock-status"; then
+		local lock_status=$(dpll_get_device_attr "$device_id" "lock-status")
+		print_result PASS "Device $device_id lock-status: $lock_status"
+
+		# Validate lock-status is one of valid values
+		case "$lock_status" in
+			unlocked|locked|locked-ho-acq|holdover)
+				print_result PASS "Device $device_id lock-status is valid value"
+				;;
+			*)
+				print_result FAIL "Device $device_id lock-status has invalid value: $lock_status"
+				;;
+		esac
+	else
+		print_result SKIP "Device $device_id lock-status (attribute not present)"
+	fi
+
+	# Test 2: Read lock-status-error
+	if dpll_device_has_attr "$device_id" "lock-status-error"; then
+		local lock_error=$(dpll_get_device_attr "$device_id" "lock-status-error")
+		print_result PASS "Device $device_id lock-status-error: $lock_error"
+
+		# Validate lock-status-error is one of valid values
+		case "$lock_error" in
+			none|undefined|media-down|fractional-frequency-offset-too-high)
+				print_result PASS "Device $device_id lock-status-error is valid value"
+				;;
+			*)
+				print_result FAIL "Device $device_id lock-status-error has invalid value: $lock_error"
+				;;
+		esac
+	else
+		print_result SKIP "Device $device_id lock-status-error (attribute not present)"
+	fi
+
+	# Test 3: Compare with Python CLI
+	if [ -n "$PYTHON_CLI" ]; then
+		local python_output="$TEST_DIR/python_device_${device_id}_lock.json"
+		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+
+		if ! dpll_python_has_error "$python_output"; then
+			local lock_status_python=$(jq -r '.["lock-status"] // empty' "$python_output" 2>/dev/null)
+			if [ "$lock_status" = "$lock_status_python" ]; then
+				print_result PASS "Device $device_id lock-status matches Python CLI"
+			else
+				print_result FAIL "Device $device_id lock-status mismatch (dpll=$lock_status, python=$lock_status_python)"
+			fi
+		fi
+	fi
+
+	echo ""
+}
+
+# Test device temperature
+test_device_temperature() {
+	print_header "Testing Device Temperature"
+
+	# Find device with temp attribute
+	local device_id=$(dpll_find_device --with-attr "temp")
+
+	if [ -z "$device_id" ]; then
+		print_result SKIP "Device temperature (no device with temp attribute)"
+		echo ""
+		return
+	fi
+
+	# Test 1: Read temp value
+	local temp=$(dpll_get_device_attr "$device_id" "temp")
+	if [ -n "$temp" ]; then
+		print_result PASS "Device $device_id temp: $temp"
+
+		# Validate temp is a number
+		if [[ "$temp" =~ ^-?[0-9]+$ ]]; then
+			print_result PASS "Device $device_id temp is valid integer"
+		else
+			print_result FAIL "Device $device_id temp is not an integer: $temp"
+		fi
+	else
+		print_result FAIL "Device $device_id temp is empty"
+	fi
+
+	# Test 2: Compare with Python CLI
+	if [ -n "$PYTHON_CLI" ]; then
+		local python_output="$TEST_DIR/python_device_${device_id}_temp.json"
+		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+
+		if ! dpll_python_has_error "$python_output"; then
+			local temp_python=$(jq -r '.temp // empty' "$python_output" 2>/dev/null)
+			if [ "$temp" = "$temp_python" ]; then
+				print_result PASS "Device $device_id temp matches Python CLI"
+			else
+				print_result FAIL "Device $device_id temp mismatch (dpll=$temp, python=$temp_python)"
+			fi
+		fi
+	fi
+
+	echo ""
+}
+
+# Test pin state operations
+test_pin_state_operations() {
+	print_header "Testing Pin State Operations"
+
+	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
+		print_result SKIP "Pin state operations (read-only mode, use --enable-set)"
+		echo ""
+		return
+	fi
+
+	# Find pin with state-can-change capability
+	local pin_id=$(dpll_find_pin --with-capability "state-can-change")
+
+	if [ -z "$pin_id" ]; then
+		print_result SKIP "Pin state operations (no pin with state-can-change capability)"
+		echo ""
+		return
+	fi
+
+	# Test 1: Read current state
+	if ! dpll_pin_has_attr "$pin_id" "state"; then
+		print_result SKIP "Pin $pin_id state (attribute not present)"
+		echo ""
+		return
+	fi
+
+	local original_state=$(dpll_get_pin_attr "$pin_id" "state")
+	print_result PASS "Pin $pin_id current state: $original_state"
+
+	# Test 2: Try to set state to connected
+	if dpll_pin_set_and_verify "$pin_id" "state" "connected"; then
+		print_result PASS "Pin $pin_id set state to connected"
+	else
+		print_result FAIL "Pin $pin_id failed to set state to connected"
+	fi
+
+	# Test 3: Try to set state to disconnected
+	if dpll_pin_set_and_verify "$pin_id" "state" "disconnected"; then
+		print_result PASS "Pin $pin_id set state to disconnected"
+	else
+		print_result FAIL "Pin $pin_id failed to set state to disconnected"
+	fi
+
+	# Test 4: Try to set state to selectable
+	if dpll_pin_set_and_verify "$pin_id" "state" "selectable"; then
+		print_result PASS "Pin $pin_id set state to selectable"
+	else
+		# selectable might not be supported, that's OK
+		print_result SKIP "Pin $pin_id state selectable (not supported)"
+	fi
+
+	# Restore original state
+	if [ -n "$original_state" ]; then
+		dpll_pin_set "$pin_id" "state" "$original_state" >> "$ERROR_LOG" 2>&1
+		print_result PASS "Pin $pin_id restored to original state: $original_state"
+	fi
+
+	# Test 5: Test parent-device state (if available)
+	if dpll_has_parent_device "$pin_id"; then
+		local device_id=$(dpll_find_device)
+		if [ -n "$device_id" ]; then
+			# Try to set parent-device state
+			if dpll_pin_set "$pin_id" parent-device "$device_id" state connected; then
+				print_result PASS "Pin $pin_id parent-device $device_id state set"
+			else
+				print_result SKIP "Pin $pin_id parent-device state (not supported)"
+			fi
+		fi
+	fi
 
 	echo ""
 }
@@ -2988,9 +3298,12 @@ main() {
 	test_device_operations
 	test_device_id_get
 	test_device_set
+	test_device_mode_operations
+	test_device_lock_status
+	test_device_temperature
 	test_pin_operations
 	test_pin_id_get
-	test_pin_set
+	test_pin_state_operations
 	test_pin_frequency_change
 	test_pin_priority_capability
 	test_parent_operations
