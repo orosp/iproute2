@@ -2142,6 +2142,115 @@ test_monitor_python_parity() {
 	echo ""
 }
 
+# Test s64 and sint attribute handling and comparison with Python CLI
+test_s64_sint_values() {
+	print_header "Testing s64/sint Attribute Handling (dpll vs Python CLI)"
+
+	if [ -z "$PYTHON_CLI" ]; then
+		print_result SKIP "s64/sint value tests (Python CLI not available)"
+		echo ""
+		return
+	fi
+
+	local dpll_json="$TEST_DIR/dpll_pins_s64.json"
+	$DPLL_TOOL -j pin show > "$dpll_json" 2>/dev/null || true
+	local pin_count=$(jq -r '.pin | length' "$dpll_json" 2>/dev/null || echo 0)
+
+	if [ "$pin_count" -eq 0 ]; then
+		print_result SKIP "s64/sint value tests (no pins available)"
+		echo ""
+		return
+	fi
+
+	# Test 1: fractional-frequency-offset (sint type)
+	local found_ffo=0
+	for ((i=0; i<pin_count; i++)); do
+		local pin_id=$(jq -r ".pin[$i].id" "$dpll_json" 2>/dev/null)
+		local ffo_dpll=$(jq -r ".pin[$i].\"fractional-frequency-offset\" // empty" "$dpll_json" 2>/dev/null)
+
+		if [ -n "$ffo_dpll" ]; then
+			found_ffo=1
+			local test_name="Pin $pin_id: fractional-frequency-offset (sint) comparison"
+
+			# Get value from Python CLI
+			local python_output="$TEST_DIR/python_pin_${pin_id}_ffo.json"
+			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+
+			local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+			if [ "$python_error" = "yes" ]; then
+				print_result SKIP "$test_name (Python CLI returned error)"
+			else
+				local ffo_python=$(jq -r ".\"fractional-frequency-offset\" // empty" "$python_output" 2>/dev/null)
+
+				if [ -z "$ffo_python" ]; then
+					print_result SKIP "$test_name (Python CLI missing attribute)"
+				elif [ "$ffo_dpll" = "$ffo_python" ]; then
+					print_result PASS "$test_name (dpll=$ffo_dpll, python=$ffo_python)"
+				else
+					print_result FAIL "$test_name (mismatch: dpll=$ffo_dpll, python=$ffo_python)"
+					echo "  DPLL output: $dpll_json"
+					echo "  Python output: $python_output"
+				fi
+			fi
+			break
+		fi
+	done
+
+	if [ $found_ffo -eq 0 ]; then
+		print_result SKIP "fractional-frequency-offset test (no pin with this attribute)"
+	fi
+
+	# Test 2: phase-offset (s64 type) in parent-device context
+	local found_phase_offset=0
+	for ((i=0; i<pin_count; i++)); do
+		local pin_id=$(jq -r ".pin[$i].id" "$dpll_json" 2>/dev/null)
+		local parent_count=$(jq -r ".pin[$i].\"parent-device\" | length" "$dpll_json" 2>/dev/null || echo 0)
+
+		if [ "$parent_count" -gt 0 ]; then
+			# Check if any parent-device has phase-offset
+			local parent_idx=0
+			for ((j=0; j<parent_count; j++)); do
+				local phase_offset_dpll=$(jq -r ".pin[$i].\"parent-device\"[$j].\"phase-offset\" // empty" "$dpll_json" 2>/dev/null)
+
+				if [ -n "$phase_offset_dpll" ]; then
+					found_phase_offset=1
+					local parent_id=$(jq -r ".pin[$i].\"parent-device\"[$j].\"parent-id\"" "$dpll_json" 2>/dev/null)
+					local test_name="Pin $pin_id parent-device $parent_id: phase-offset (s64) comparison"
+
+					# Get value from Python CLI
+					local python_output="$TEST_DIR/python_pin_${pin_id}_phase.json"
+					python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+
+					local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+					if [ "$python_error" = "yes" ]; then
+						print_result SKIP "$test_name (Python CLI returned error)"
+					else
+						# Find the matching parent-device in Python output
+						local phase_offset_python=$(jq -r ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id) | .\"phase-offset\" // empty" "$python_output" 2>/dev/null)
+
+						if [ -z "$phase_offset_python" ]; then
+							print_result SKIP "$test_name (Python CLI missing attribute)"
+						elif [ "$phase_offset_dpll" = "$phase_offset_python" ]; then
+							print_result PASS "$test_name (dpll=$phase_offset_dpll, python=$phase_offset_python)"
+						else
+							print_result FAIL "$test_name (mismatch: dpll=$phase_offset_dpll, python=$phase_offset_python)"
+							echo "  DPLL output: $dpll_json"
+							echo "  Python output: $python_output"
+						fi
+					fi
+					break 2  # Break both loops
+				fi
+			done
+		fi
+	done
+
+	if [ $found_phase_offset -eq 0 ]; then
+		print_result SKIP "phase-offset test (no pin with parent-device phase-offset)"
+	fi
+
+	echo ""
+}
+
 # Test error handling
 test_error_handling() {
 	print_header "Testing Error Handling"
@@ -2326,6 +2435,7 @@ main() {
 	test_pin_by_id_formats
 	test_pretty_json
 	test_error_handling
+	test_s64_sint_values
 
 	print_summary
 }
