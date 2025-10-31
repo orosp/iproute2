@@ -1056,7 +1056,7 @@ test_device_operations() {
 			local python_dev_json="$TEST_DIR/python_device_$device_id.json"
 
 			$DPLL_TOOL -j device show id "$device_id" > "$dpll_dev_json" 2>&1 || true
-			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json '{"id": '$device_id'}' --output-json > "$python_dev_json" 2>&1 || true
+			"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json '{"id": '$device_id'}' --output-json > "$python_dev_json" 2>&1 || true
 
 			# Check if either tool returned an error
 			if dpll_python_has_error "$python_dev_json" && dpll_has_error "$dpll_dev_json"; then
@@ -1133,7 +1133,7 @@ test_device_id_get() {
 				local python_result="$TEST_DIR/python_device_id_get_module.json"
 
 				$DPLL_TOOL -j device id-get module-name "$module_name" > "$dpll_result" 2>&1 || true
-				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
+				"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
 				if dpll_python_has_error "$python_result" && dpll_has_error "$dpll_result"; then
@@ -1190,7 +1190,7 @@ test_device_id_get() {
 				local python_result="$TEST_DIR/python_device_id_get_clock.json"
 
 				$DPLL_TOOL -j device id-get module-name "$module_name" clock-id "$clock_id" > "$dpll_result" 2>&1 || true
-				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'", "clock-id": '"$clock_id"'}' --output-json > "$python_result" 2>&1 || true
+				"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'", "clock-id": '"$clock_id"'}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
 				if dpll_python_has_error "$python_result" && dpll_has_error "$dpll_result"; then
@@ -1280,7 +1280,7 @@ test_pin_operations() {
 			local python_pin_json="$TEST_DIR/python_pin_$pin_id.json"
 
 			$DPLL_TOOL -j pin show id "$pin_id" > "$dpll_pin_json" 2>&1 || true
-			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json '{"id": '$pin_id'}' --output-json > "$python_pin_json" 2>&1 || true
+			"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json '{"id": '$pin_id'}' --output-json > "$python_pin_json" 2>&1 || true
 
 			# Check if either tool returned an error
 			if dpll_python_has_error "$python_pin_json" && dpll_has_error "$dpll_pin_json"; then
@@ -1357,7 +1357,7 @@ test_pin_id_get() {
 				local python_result="$TEST_DIR/python_pin_id_get.json"
 
 				$DPLL_TOOL -j pin id-get board-label "$board_label" > "$dpll_result" 2>&1 || true
-				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"board-label": "'"$board_label"'"}' --output-json > "$python_result" 2>&1 || true
+				"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"board-label": "'"$board_label"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
 				if dpll_python_has_error "$python_result" && dpll_has_error "$dpll_result"; then
@@ -1411,7 +1411,7 @@ test_pin_id_get() {
 				local python_result="$TEST_DIR/python_pin_id_get_module.json"
 
 				$DPLL_TOOL -j pin id-get module-name "$module_name" > "$dpll_result" 2>&1 || true
-				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
+				"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
 				if dpll_python_has_error "$python_result" && dpll_has_error "$dpll_result"; then
@@ -1868,7 +1868,7 @@ test_device_lock_status() {
 	# Test 3: Compare with Python CLI
 	if [ -n "$PYTHON_CLI" ]; then
 		local python_output="$TEST_DIR/python_device_${device_id}_lock.json"
-		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+		"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
 		if ! dpll_python_has_error "$python_output"; then
 			local lock_status_python=$(jq -r '.["lock-status"] // empty' "$python_output" 2>/dev/null)
@@ -1914,7 +1914,7 @@ test_device_temperature() {
 	# Test 2: Compare with Python CLI
 	if [ -n "$PYTHON_CLI" ]; then
 		local python_output="$TEST_DIR/python_device_${device_id}_temp.json"
-		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+		"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
 		if ! dpll_python_has_error "$python_output"; then
 			local temp_python=$(jq -r '.temp // empty' "$python_output" 2>/dev/null)
@@ -2023,7 +2023,7 @@ test_phase_offset_monitoring() {
 				# Compare with Python CLI
 				if [ -n "$PYTHON_CLI" ]; then
 					local python_output="$TEST_DIR/python_pin_${pin_with_phase}_phase.json"
-					python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_with_phase}" --output-json > "$python_output" 2>&1 || true
+					"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_with_phase}" --output-json > "$python_output" 2>&1 || true
 
 					if ! dpll_python_has_error "$python_output"; then
 						local phase_offset_python=$(jq -r ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id) | .\"phase-offset\" // empty" "$python_output" 2>/dev/null)
@@ -2342,7 +2342,7 @@ test_pin_type_validation() {
 		local pin_id=$(dpll_find_pin --with-attr "type")
 		if [ -n "$pin_id" ]; then
 			local python_output="$TEST_DIR/python_pin_${pin_id}_type.json"
-			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+			"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
 			if ! dpll_python_has_error "$python_output"; then
 				local type_dpll=$(dpll_get_pin_attr "$pin_id" "type")
@@ -2524,7 +2524,7 @@ test_parent_device_attributes() {
 			# Test 6: Compare with Python CLI
 			if [ -n "$PYTHON_CLI" ]; then
 				local python_output="$TEST_DIR/python_pin_${pin_with_parent}_parent.json"
-				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_with_parent}" --output-json > "$python_output" 2>&1 || true
+				"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_with_parent}" --output-json > "$python_output" 2>&1 || true
 
 				if ! dpll_python_has_error "$python_output"; then
 					local parent_device_python=$(jq -c ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id)" "$python_output" 2>/dev/null)
@@ -3259,7 +3259,7 @@ test_s64_sint_values() {
 
 		# Get value from Python CLI
 		local python_output="$TEST_DIR/python_pin_${pin_id}_ffo.json"
-		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+		"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
 		if dpll_python_has_error "$python_output"; then
 			print_result SKIP "$test_name (Python CLI returned error)"
@@ -3298,7 +3298,7 @@ test_s64_sint_values() {
 
 					# Get value from Python CLI
 					local python_output="$TEST_DIR/python_pin_${pin_id}_phase.json"
-					python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+					"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
 					if dpll_python_has_error "$python_output"; then
 						print_result SKIP "$test_name (Python CLI returned error)"
@@ -3349,7 +3349,7 @@ test_multi_enum_arrays() {
 
 		# Get value from Python CLI
 		local python_output="$TEST_DIR/python_device_${device_id}_modes.json"
-		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+		"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
 		if dpll_python_has_error "$python_output"; then
 			print_result SKIP "$test_name (Python CLI returned error)"
@@ -3379,7 +3379,7 @@ test_multi_enum_arrays() {
 
 		# Get value from Python CLI
 		local python_output="$TEST_DIR/python_device_${device_id}_cql.json"
-		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+		"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
 		if dpll_python_has_error "$python_output"; then
 			print_result SKIP "$test_name (Python CLI returned error)"
@@ -3435,7 +3435,7 @@ test_pin_complete_comparison() {
 
 	# Get pin from Python CLI
 	local python_output="$TEST_DIR/python_pin_${pin_id}_complete.json"
-	python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+	"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
 	# Check for errors
 	if dpll_python_has_error "$python_output" && dpll_has_error "$dpll_output"; then
@@ -3502,7 +3502,7 @@ test_device_complete_comparison() {
 
 	# Get device from Python CLI
 	local python_output="$TEST_DIR/python_device_${device_id}_complete.json"
-	python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+	"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
 	# Check for errors
 	if dpll_python_has_error "$python_output" && dpll_has_error "$dpll_output"; then
