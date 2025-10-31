@@ -658,6 +658,34 @@ dpll_has_reference_sync() {
 	[ "$has_ref" = "true" ]
 }
 
+# Helper: Check if Python CLI output has error
+# Usage: dpll_python_has_error OUTPUT_FILE
+# Returns: 0 if error, 1 if no error
+dpll_python_has_error() {
+	local output_file="$1"
+	grep -qE "Netlink (warning|error):" "$output_file" 2>/dev/null
+}
+
+# Helper: Check if dpll tool output has error
+# Usage: dpll_has_error OUTPUT_FILE
+# Returns: 0 if error, 1 if no error
+dpll_has_error() {
+	local output_file="$1"
+
+	# Check for error message
+	if grep -q "Failed to get\|Failed to dump" "$output_file" 2>/dev/null; then
+		return 0
+	fi
+
+	# Check for empty JSON {}
+	local json_content=$(grep -o '{.*}' "$output_file" 2>/dev/null | tr -d '[:space:]')
+	if [ "$json_content" = "{}" ]; then
+		return 0
+	fi
+
+	return 1
+}
+
 #==============================================================================
 # End of DPLL Test API
 #==============================================================================
@@ -940,19 +968,12 @@ test_device_operations() {
 			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json '{"id": '$device_id'}' --output-json > "$python_dev_json" 2>&1 || true
 
 			# Check if either tool returned an error
-			local python_error=$(grep -qE "Netlink (warning|error):" "$python_dev_json" 2>/dev/null && echo "yes" || echo "no")
-			# dpll error: check for error message OR empty JSON {}
-			local dpll_has_error_msg=$(grep -q "Failed to get\|Failed to dump" "$dpll_dev_json" 2>/dev/null && echo "yes" || echo "no")
-			local dpll_json_content=$(grep -o '{.*}' "$dpll_dev_json" 2>/dev/null | tr -d '[:space:]')
-			local dpll_error="no"
-			if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
-				dpll_error="yes"
-			fi
-
-			if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+			if dpll_python_has_error "$python_dev_json" && dpll_has_error "$dpll_dev_json"; then
 				print_result PASS "device show id $device_id (vs Python) (both returned error)"
-			elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
-				print_result FAIL "device show id $device_id (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+			elif dpll_python_has_error "$python_dev_json" || dpll_has_error "$dpll_dev_json"; then
+				local dpll_err="no"; dpll_has_error "$dpll_dev_json" && dpll_err="yes"
+				local python_err="no"; dpll_python_has_error "$python_dev_json" && python_err="yes"
+				print_result FAIL "device show id $device_id (vs Python) (error mismatch: dpll=$dpll_err, python=$python_err)"
 				echo "  DPLL command: $DPLL_TOOL -j device show id \"$device_id\""
 				echo "  DPLL output file: $dpll_dev_json"
 				echo "  DPLL raw content:"
