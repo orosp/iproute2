@@ -2251,6 +2251,111 @@ test_s64_sint_values() {
 	echo ""
 }
 
+# Test multi-enum arrays (DPLL_PR_MULTI_ENUM_STR macro)
+test_multi_enum_arrays() {
+	print_header "Testing Multi-Enum Arrays (dpll vs Python CLI)"
+
+	if [ -z "$PYTHON_CLI" ]; then
+		print_result SKIP "multi-enum array tests (Python CLI not available)"
+		echo ""
+		return
+	fi
+
+	local dpll_json="$TEST_DIR/dpll_devices_multi_enum.json"
+	$DPLL_TOOL -j device show > "$dpll_json" 2>/dev/null || true
+	local device_count=$(jq -r '.device | length' "$dpll_json" 2>/dev/null || echo 0)
+
+	if [ "$device_count" -eq 0 ]; then
+		print_result SKIP "multi-enum array tests (no devices available)"
+		echo ""
+		return
+	fi
+
+	# Test 1: mode-supported multi-enum array
+	local found_mode_supported=0
+	for ((i=0; i<device_count; i++)); do
+		local device_id=$(jq -r ".device[$i].id" "$dpll_json" 2>/dev/null)
+		local mode_supported_count=$(jq -r ".device[$i].\"mode-supported\" | length" "$dpll_json" 2>/dev/null || echo 0)
+
+		if [ "$mode_supported_count" -gt 0 ]; then
+			found_mode_supported=1
+			local test_name="Device $device_id: mode-supported array comparison"
+
+			# Get sorted array from dpll tool
+			local modes_dpll=$(jq -r ".device[$i].\"mode-supported\" | sort | .[]" "$dpll_json" 2>/dev/null | tr '\n' ' ')
+
+			# Get value from Python CLI
+			local python_output="$TEST_DIR/python_device_${device_id}_modes.json"
+			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+
+			local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+			if [ "$python_error" = "yes" ]; then
+				print_result SKIP "$test_name (Python CLI returned error)"
+			else
+				local modes_python=$(jq -r ".\"mode-supported\" | sort | .[]" "$python_output" 2>/dev/null | tr '\n' ' ')
+
+				if [ -z "$modes_python" ]; then
+					print_result SKIP "$test_name (Python CLI missing attribute)"
+				elif [ "$modes_dpll" = "$modes_python" ]; then
+					print_result PASS "$test_name (count=$mode_supported_count, match)"
+				else
+					print_result FAIL "$test_name (mismatch: dpll=[$modes_dpll], python=[$modes_python])"
+					echo "  DPLL output: $dpll_json"
+					echo "  Python output: $python_output"
+				fi
+			fi
+			break
+		fi
+	done
+
+	if [ $found_mode_supported -eq 0 ]; then
+		print_result SKIP "mode-supported test (no device with this attribute)"
+	fi
+
+	# Test 2: clock-quality-level multi-enum array
+	local found_clock_quality=0
+	for ((i=0; i<device_count; i++)); do
+		local device_id=$(jq -r ".device[$i].id" "$dpll_json" 2>/dev/null)
+		local cql_count=$(jq -r ".device[$i].\"clock-quality-level\" | length" "$dpll_json" 2>/dev/null || echo 0)
+
+		if [ "$cql_count" -gt 0 ]; then
+			found_clock_quality=1
+			local test_name="Device $device_id: clock-quality-level array comparison"
+
+			# Get sorted array from dpll tool
+			local cql_dpll=$(jq -r ".device[$i].\"clock-quality-level\" | sort | .[]" "$dpll_json" 2>/dev/null | tr '\n' ' ')
+
+			# Get value from Python CLI
+			local python_output="$TEST_DIR/python_device_${device_id}_cql.json"
+			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+
+			local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+			if [ "$python_error" = "yes" ]; then
+				print_result SKIP "$test_name (Python CLI returned error)"
+			else
+				local cql_python=$(jq -r ".\"clock-quality-level\" | sort | .[]" "$python_output" 2>/dev/null | tr '\n' ' ')
+
+				if [ -z "$cql_python" ]; then
+					print_result SKIP "$test_name (Python CLI missing attribute)"
+				elif [ "$cql_dpll" = "$cql_python" ]; then
+					print_result PASS "$test_name (count=$cql_count, match)"
+				else
+					print_result FAIL "$test_name (mismatch: dpll=[$cql_dpll], python=[$cql_python])"
+					echo "  DPLL output: $dpll_json"
+					echo "  Python output: $python_output"
+				fi
+			fi
+			break
+		fi
+	done
+
+	if [ $found_clock_quality -eq 0 ]; then
+		print_result SKIP "clock-quality-level test (no device with this attribute)"
+	fi
+
+	echo ""
+}
+
 # Test error handling
 test_error_handling() {
 	print_header "Testing Error Handling"
@@ -2436,6 +2541,7 @@ main() {
 	test_pretty_json
 	test_error_handling
 	test_s64_sint_values
+	test_multi_enum_arrays
 
 	print_summary
 }
