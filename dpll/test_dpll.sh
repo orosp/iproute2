@@ -55,8 +55,9 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m' # No Color
 
-# Unicode box drawing characters (fallback to ASCII if not supported)
-if [[ "$LANG" =~ "UTF-8" ]] || [[ "$LC_ALL" =~ "UTF-8" ]]; then
+# Box drawing characters - use ASCII by default for better compatibility
+# Set USE_UNICODE=1 environment variable to enable Unicode box characters
+if [ "$USE_UNICODE" = "1" ]; then
 	BOX_H="─"
 	BOX_V="│"
 	BOX_TL="┌"
