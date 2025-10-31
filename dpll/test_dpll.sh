@@ -591,6 +591,73 @@ dpll_test_device_has_attrs() {
 	dpll_assert_not_empty "Device $device_id has clock-id" "$clock_id"
 }
 
+# Helper: Test parent-device SET operation with error detection
+# Usage: dpll_test_parent_device_set PIN_ID DEVICE_ID ATTR VALUE [ATTR2 VALUE2 ...]
+# Returns: 0 on success, 1 on failure, 2 on skip (not supported)
+dpll_test_parent_device_set() {
+	local pin_id="$1"
+	local device_id="$2"
+	shift 2
+
+	local test_name="Pin $pin_id parent-device $device_id set: $*"
+
+	if dpll_pin_set "$pin_id" parent-device "$device_id" "$@"; then
+		print_result PASS "$test_name"
+		return 0
+	else
+		local exit_code=$?
+		if [ $exit_code -gt 128 ]; then
+			print_result FAIL "$test_name (crashed with signal $((exit_code - 128)))"
+			return 1
+		else
+			print_result SKIP "$test_name (not supported)"
+			return 2
+		fi
+	fi
+}
+
+# Helper: Check if pin has parent-device attribute
+# Usage: dpll_has_parent_device PIN_ID
+dpll_has_parent_device() {
+	local pin_id="$1"
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		return 1
+	fi
+
+	local has_parent=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r 'has("parent-device")' 2>> "$ERROR_LOG")
+	[ "$has_parent" = "true" ]
+}
+
+# Helper: Check if pin has parent-pin attribute
+# Usage: dpll_has_parent_pin PIN_ID
+dpll_has_parent_pin() {
+	local pin_id="$1"
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		return 1
+	fi
+
+	local has_parent=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r 'has("parent-pin")' 2>> "$ERROR_LOG")
+	[ "$has_parent" = "true" ]
+}
+
+# Helper: Check if pin has reference-sync attribute
+# Usage: dpll_has_reference_sync PIN_ID
+dpll_has_reference_sync() {
+	local pin_id="$1"
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		return 1
+	fi
+
+	local has_ref=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r 'has("reference-sync")' 2>> "$ERROR_LOG")
+	[ "$has_ref" = "true" ]
+}
+
 #==============================================================================
 # End of DPLL Test API
 #==============================================================================
@@ -853,8 +920,8 @@ test_device_operations() {
 		print_result FAIL "dpll device show -j"
 	fi
 
-	# Get first device ID from dump
-	local device_id=$(grep -oP '^device id \K\d+' "$dpll_dump" | head -1)
+	# Get first device ID
+	local device_id=$(dpll_find_device)
 
 	if [ -n "$device_id" ]; then
 		# Test device show by ID
@@ -914,23 +981,18 @@ test_device_operations() {
 test_device_id_get() {
 	print_header "Testing Device ID Get"
 
-	# Get device data in JSON for easier parsing
-	local dpll_json="$TEST_DIR/dpll_device_dump.json"
-	$DPLL_TOOL -j device show > "$dpll_json" 2>&1 || true
-
 	if ! command -v jq &>/dev/null; then
 		print_result SKIP "device id-get tests (jq not available)"
 		echo ""
 		return
 	fi
 
-	# Get first device with module-name
-	local device_data=$(jq -r '.device[0] | {id, module_name: .["module-name"], clock_id: .["clock-id"]} | @json' "$dpll_json" 2>/dev/null)
+	# Get first device
+	local device_id=$(dpll_find_device)
 
-	if [ -n "$device_data" ]; then
-		local device_id=$(echo "$device_data" | jq -r '.id' 2>/dev/null)
-		local module_name=$(echo "$device_data" | jq -r '.module_name' 2>/dev/null)
-		local clock_id=$(echo "$device_data" | jq -r '.clock_id' 2>/dev/null)
+	if [ -n "$device_id" ]; then
+		local module_name=$(dpll_get_device_attr "$device_id" "module-name")
+		local clock_id=$(dpll_get_device_attr "$device_id" "clock-id")
 
 		if [ -n "$module_name" ] && [ "$module_name" != "null" ]; then
 			# Test device-id-get by module-name
@@ -1103,8 +1165,8 @@ test_pin_operations() {
 		print_result FAIL "dpll pin show -j"
 	fi
 
-	# Get first pin ID from dump
-	local pin_id=$(grep -oP '^pin id \K\d+' "$dpll_dump" | head -1)
+	# Get first pin ID
+	local pin_id=$(dpll_find_pin)
 
 	if [ -n "$pin_id" ]; then
 		# Test pin show by ID
@@ -1158,7 +1220,7 @@ test_pin_operations() {
 	fi
 
 	# Test pin show with device filter
-	local device_id=$(grep -oP '^device id \K\d+' "$TEST_DIR/dpll_device_dump.txt" 2>/dev/null | head -1)
+	local device_id=$(dpll_find_device)
 	if [ -n "$device_id" ]; then
 		if $DPLL_TOOL pin show device "$device_id" > /dev/null 2>&1; then
 			print_result PASS "dpll pin show device $device_id"
@@ -1176,10 +1238,6 @@ test_pin_operations() {
 test_pin_id_get() {
 	print_header "Testing Pin ID Get"
 
-	# Get pin data in JSON for easier parsing
-	local dpll_json="$TEST_DIR/dpll_pin_dump.json"
-	$DPLL_TOOL -j pin show > "$dpll_json" 2>&1 || true
-
 	if ! command -v jq &>/dev/null; then
 		print_result SKIP "pin id-get tests (jq not available)"
 		echo ""
@@ -1187,12 +1245,11 @@ test_pin_id_get() {
 	fi
 
 	# Get first pin with board-label
-	local pin_data=$(jq -r '.pin[] | select(.["board-label"] != null) | {id, board_label: .["board-label"], module_name: .["module-name"]} | @json' "$dpll_json" 2>/dev/null | head -1)
+	local pin_id=$(dpll_find_pin --with-attr "board-label")
 
-	if [ -n "$pin_data" ]; then
-		local pin_id=$(echo "$pin_data" | jq -r '.id' 2>/dev/null)
-		local board_label=$(echo "$pin_data" | jq -r '.board_label' 2>/dev/null)
-		local module_name=$(echo "$pin_data" | jq -r '.module_name' 2>/dev/null)
+	if [ -n "$pin_id" ]; then
+		local board_label=$(dpll_get_pin_attr "$pin_id" "board-label")
+		local module_name=$(dpll_get_pin_attr "$pin_id" "module-name")
 
 		if [ -n "$board_label" ] && [ "$board_label" != "null" ]; then
 			# Test pin-id-get by board-label
@@ -1589,7 +1646,7 @@ test_pin_by_id_formats() {
 	echo ""
 }
 
-# Test device set operations
+# Test device set operations (refactored to use DPLL API)
 test_device_set() {
 	print_header "Testing Device Set Operations"
 
@@ -1599,26 +1656,27 @@ test_device_set() {
 		return
 	fi
 
-	local device_id=$(grep -oP '^device id \K\d+' "$TEST_DIR/dpll_device_dump.txt" 2>/dev/null | head -1)
+	# Find any device
+	local device_id=$(dpll_find_device)
 
-	if [ -n "$device_id" ]; then
-		# Test device set with phase-offset-monitor (read current value first)
-		local cmd="$DPLL_TOOL device set id $device_id phase-offset-monitor true"
-		if run_test_command "Device set phase-offset-monitor" "$cmd 2>/dev/null"; then
-			print_result PASS "Device set phase-offset-monitor true"
-		else
-			print_result SKIP "Device set phase-offset-monitor (not supported by device)"
-		fi
-
-		# Test device set with phase-offset-avg-factor
-		local cmd="$DPLL_TOOL device set id $device_id phase-offset-avg-factor 10"
-		if run_test_command "Device set phase-offset-avg-factor" "$cmd 2>/dev/null"; then
-			print_result PASS "Device set phase-offset-avg-factor 10"
-		else
-			print_result SKIP "Device set phase-offset-avg-factor (not supported by device)"
-		fi
-	else
+	if [ -z "$device_id" ]; then
 		print_result SKIP "Device set operations (no devices)"
+		echo ""
+		return
+	fi
+
+	# Test device set with phase-offset-monitor
+	if dpll_device_set "$device_id" phase-offset-monitor true; then
+		print_result PASS "Device $device_id set phase-offset-monitor true"
+	else
+		print_result SKIP "Device $device_id phase-offset-monitor (not supported)"
+	fi
+
+	# Test device set with phase-offset-avg-factor
+	if dpll_device_set "$device_id" phase-offset-avg-factor 10; then
+		print_result PASS "Device $device_id set phase-offset-avg-factor 10"
+	else
+		print_result SKIP "Device $device_id phase-offset-avg-factor (not supported)"
 	fi
 
 	echo ""
@@ -1757,18 +1815,18 @@ test_pin_priority_capability() {
 	echo ""
 }
 
-# Test parent-device and parent-pin operations
+# Test parent-device and parent-pin operations (refactored to use DPLL API)
 test_parent_operations() {
 	print_header "Testing Parent Device/Pin Operations"
 
-	local pin_dump="$TEST_DIR/dpll_pin_dump.txt"
+	# Find pin with parent-device
+	local pin_with_parent_device=$(dpll_find_pin --with-attr "parent-device")
 
-	# Check if any pin has parent-device in output
-	if grep -q "parent-device" "$pin_dump" 2>/dev/null; then
-		print_result PASS "Parent-device attribute found in pin output"
+	if [ -n "$pin_with_parent_device" ]; then
+		print_result PASS "Parent-device attribute found (pin $pin_with_parent_device)"
 
-		# Test parsing of parent-device arrays
-		local parent_count=$(grep -c "parent-device:" "$pin_dump" 2>/dev/null || echo 0)
+		# Count parent-device entries
+		local parent_count=$(echo "${DPLL_PIN_CACHE[$pin_with_parent_device]}" | jq -r '.["parent-device"] | length' 2>> "$ERROR_LOG")
 		if [ "$parent_count" -gt 0 ]; then
 			print_result PASS "Parent-device array parsing ($parent_count entries)"
 		fi
@@ -1776,12 +1834,14 @@ test_parent_operations() {
 		print_result SKIP "Parent-device (not present in hardware)"
 	fi
 
-	# Check if any pin has parent-pin in output
-	if grep -q "parent-pin" "$pin_dump" 2>/dev/null; then
-		print_result PASS "Parent-pin attribute found in pin output"
+	# Find pin with parent-pin
+	local pin_with_parent_pin=$(dpll_find_pin --with-attr "parent-pin")
 
-		# Test parsing of parent-pin arrays
-		local parent_pin_count=$(grep -c "parent-pin:" "$pin_dump" 2>/dev/null || echo 0)
+	if [ -n "$pin_with_parent_pin" ]; then
+		print_result PASS "Parent-pin attribute found (pin $pin_with_parent_pin)"
+
+		# Count parent-pin entries
+		local parent_pin_count=$(echo "${DPLL_PIN_CACHE[$pin_with_parent_pin]}" | jq -r '.["parent-pin"] | length' 2>> "$ERROR_LOG")
 		if [ "$parent_pin_count" -gt 0 ]; then
 			print_result PASS "Parent-pin array parsing ($parent_pin_count entries)"
 		fi
@@ -1789,68 +1849,23 @@ test_parent_operations() {
 		print_result SKIP "Parent-pin (not present in hardware)"
 	fi
 
-	# Test pin set with parent-device (if we have devices and pins)
+	# Test pin set with parent-device
 	if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
-		local device_id=$(grep -oP '^device id \K\d+' "$TEST_DIR/dpll_device_dump.txt" 2>/dev/null | head -1)
-		local pin_id=$(grep -oP '^pin id \K\d+' "$pin_dump" 2>/dev/null | head -1)
+		local device_id=$(dpll_find_device)
+		local pin_id=$(dpll_find_pin)
 
 		if [ -n "$device_id" ] && [ -n "$pin_id" ]; then
 			# Test parent-device with state
-			local error_file="$TEST_DIR/parent_device_error.txt"
-			./dpll pin set id $pin_id parent-device $device_id state connected > /dev/null 2>"$error_file"
-			local exit_code=$?
-			if [ $exit_code -eq 0 ]; then
-				print_result PASS "Pin set with parent-device state"
-			elif [ $exit_code -gt 128 ]; then
-				print_result FAIL "Pin set with parent-device state (crashed with signal $((exit_code - 128)))"
-				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id state connected"
-				echo "  Values: pin_id=$pin_id, device_id=$device_id"
-				if [ -s "$error_file" ]; then
-					echo "  Error output:"
-					cat "$error_file" | head -10 | sed 's/^/    /'
-				fi
-			else
-				print_result SKIP "Pin set with parent-device state (not supported)"
-			fi
+			dpll_test_parent_device_set "$pin_id" "$device_id" state connected
 
 			# Test parent-device with prio
-			./dpll pin set id $pin_id parent-device $device_id prio 5 > /dev/null 2>"$error_file"
-			exit_code=$?
-			if [ $exit_code -eq 0 ]; then
-				print_result PASS "Pin set with parent-device prio"
-			elif [ $exit_code -gt 128 ]; then
-				print_result FAIL "Pin set with parent-device prio (crashed with signal $((exit_code - 128)))"
-				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id prio 5"
-				echo "  Values: pin_id=$pin_id, device_id=$device_id"
-			else
-				print_result SKIP "Pin set with parent-device prio (not supported)"
-			fi
+			dpll_test_parent_device_set "$pin_id" "$device_id" prio 5
 
 			# Test parent-device with direction
-			./dpll pin set id $pin_id parent-device $device_id direction input > /dev/null 2>"$error_file"
-			exit_code=$?
-			if [ $exit_code -eq 0 ]; then
-				print_result PASS "Pin set with parent-device direction"
-			elif [ $exit_code -gt 128 ]; then
-				print_result FAIL "Pin set with parent-device direction (crashed with signal $((exit_code - 128)))"
-				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id direction input"
-				echo "  Values: pin_id=$pin_id, device_id=$device_id"
-			else
-				print_result SKIP "Pin set with parent-device direction (not supported)"
-			fi
+			dpll_test_parent_device_set "$pin_id" "$device_id" direction input
 
 			# Test parent-device with multiple attributes
-			./dpll pin set id $pin_id parent-device $device_id state connected prio 10 direction input > /dev/null 2>"$error_file"
-			exit_code=$?
-			if [ $exit_code -eq 0 ]; then
-				print_result PASS "Pin set with parent-device multiple attributes"
-			elif [ $exit_code -gt 128 ]; then
-				print_result FAIL "Pin set with parent-device multiple attributes (crashed with signal $((exit_code - 128)))"
-				echo "  Command: $DPLL_TOOL pin set id $pin_id parent-device $device_id state connected prio 10 direction input"
-				echo "  Values: pin_id=$pin_id, device_id=$device_id"
-			else
-				print_result SKIP "Pin set with parent-device multiple attributes (not supported)"
-			fi
+			dpll_test_parent_device_set "$pin_id" "$device_id" state connected prio 10 direction input
 		else
 			print_result SKIP "Pin set with parent-device (missing device or pin)"
 		fi
@@ -1861,18 +1876,18 @@ test_parent_operations() {
 	echo ""
 }
 
-# Test reference-sync operations
+# Test reference-sync operations (refactored to use DPLL API)
 test_reference_sync() {
 	print_header "Testing Reference-Sync Operations"
 
-	local pin_dump="$TEST_DIR/pin_legacy.txt"
+	# Find pin with reference-sync
+	local pin_with_ref_sync=$(dpll_find_pin --with-attr "reference-sync")
 
-	# Check if any pin has reference-sync in output
-	if grep -q "reference-sync" "$pin_dump" 2>/dev/null; then
-		print_result PASS "Reference-sync attribute found in pin output"
+	if [ -n "$pin_with_ref_sync" ]; then
+		print_result PASS "Reference-sync attribute found (pin $pin_with_ref_sync)"
 
 		# Count reference-sync entries
-		local ref_count=$(grep -c "reference-sync:" "$pin_dump" 2>/dev/null || echo 0)
+		local ref_count=$(echo "${DPLL_PIN_CACHE[$pin_with_ref_sync]}" | jq -r '.["reference-sync"] | length' 2>> "$ERROR_LOG")
 		if [ "$ref_count" -gt 0 ]; then
 			print_result PASS "Reference-sync array parsing ($ref_count entries)"
 		fi
@@ -1882,25 +1897,25 @@ test_reference_sync() {
 
 	# Test pin set with reference-sync
 	if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
-		local pin_id=$(grep -oP '^pin id \K\d+' "$pin_dump" 2>/dev/null | head -1)
-		local ref_pin_id=$(grep -oP '^pin id \K\d+' "$pin_dump" 2>/dev/null | sed -n '2p')
+		dpll_load_pins
 
-		if [ -n "$pin_id" ] && [ -n "$ref_pin_id" ]; then
-			local error_file="$TEST_DIR/reference_sync_error.txt"
-			./dpll pin set id $pin_id reference-sync $ref_pin_id state connected > /dev/null 2>"$error_file"
-			local exit_code=$?
-			if [ $exit_code -eq 0 ]; then
-				print_result PASS "Pin set with reference-sync"
-			elif [ $exit_code -gt 128 ]; then
-				print_result FAIL "Pin set with reference-sync (crashed with signal $((exit_code - 128)))"
-				echo "  Command: $DPLL_TOOL pin set id $pin_id reference-sync $ref_pin_id state connected"
-				echo "  Values: pin_id=$pin_id, ref_pin_id=$ref_pin_id"
-				if [ -s "$error_file" ]; then
-					echo "  Error output:"
-					cat "$error_file" | head -10 | sed 's/^/    /'
-				fi
+		# Get two different pin IDs
+		local pin_ids=(${!DPLL_PIN_CACHE[@]})
+		if [ ${#pin_ids[@]} -ge 2 ]; then
+			local pin_id="${pin_ids[0]}"
+			local ref_pin_id="${pin_ids[1]}"
+
+			local test_name="Pin $pin_id reference-sync $ref_pin_id set: state connected"
+
+			if dpll_pin_set "$pin_id" reference-sync "$ref_pin_id" state connected; then
+				print_result PASS "$test_name"
 			else
-				print_result SKIP "Pin set with reference-sync (not supported)"
+				local exit_code=$?
+				if [ $exit_code -gt 128 ]; then
+					print_result FAIL "$test_name (crashed with signal $((exit_code - 128)))"
+				else
+					print_result SKIP "$test_name (not supported)"
+				fi
 			fi
 		else
 			print_result SKIP "Pin set with reference-sync (not enough pins)"
@@ -2521,69 +2536,51 @@ test_s64_sint_values() {
 		return
 	fi
 
-	local dpll_json="$TEST_DIR/dpll_pins_s64.json"
-	$DPLL_TOOL -j pin show > "$dpll_json" 2>/dev/null || true
-	local pin_count=$(jq -r '.pin | length' "$dpll_json" 2>/dev/null || echo 0)
-
-	if [ "$pin_count" -eq 0 ]; then
-		print_result SKIP "s64/sint value tests (no pins available)"
-		echo ""
-		return
-	fi
-
 	# Test 1: fractional-frequency-offset (sint type)
-	local found_ffo=0
-	for ((i=0; i<pin_count; i++)); do
-		local pin_id=$(jq -r ".pin[$i].id" "$dpll_json" 2>/dev/null)
-		local ffo_dpll=$(jq -r ".pin[$i].\"fractional-frequency-offset\" // empty" "$dpll_json" 2>/dev/null)
+	local pin_id=$(dpll_find_pin --with-attr "fractional-frequency-offset")
 
-		if [ -n "$ffo_dpll" ]; then
-			found_ffo=1
-			local test_name="Pin $pin_id: fractional-frequency-offset (sint) comparison"
+	if [ -n "$pin_id" ]; then
+		local test_name="Pin $pin_id: fractional-frequency-offset (sint) comparison"
+		local ffo_dpll=$(dpll_get_pin_attr "$pin_id" "fractional-frequency-offset")
 
-			# Get value from Python CLI
-			local python_output="$TEST_DIR/python_pin_${pin_id}_ffo.json"
-			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+		# Get value from Python CLI
+		local python_output="$TEST_DIR/python_pin_${pin_id}_ffo.json"
+		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
-			local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-			if [ "$python_error" = "yes" ]; then
-				print_result SKIP "$test_name (Python CLI returned error)"
+		local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+		if [ "$python_error" = "yes" ]; then
+			print_result SKIP "$test_name (Python CLI returned error)"
+		else
+			local ffo_python=$(jq -r ".\"fractional-frequency-offset\" // empty" "$python_output" 2>/dev/null)
+
+			if [ -z "$ffo_python" ]; then
+				print_result SKIP "$test_name (Python CLI missing attribute)"
+			elif [ "$ffo_dpll" = "$ffo_python" ]; then
+				print_result PASS "$test_name (dpll=$ffo_dpll, python=$ffo_python)"
 			else
-				local ffo_python=$(jq -r ".\"fractional-frequency-offset\" // empty" "$python_output" 2>/dev/null)
-
-				if [ -z "$ffo_python" ]; then
-					print_result SKIP "$test_name (Python CLI missing attribute)"
-				elif [ "$ffo_dpll" = "$ffo_python" ]; then
-					print_result PASS "$test_name (dpll=$ffo_dpll, python=$ffo_python)"
-				else
-					print_result FAIL "$test_name (mismatch: dpll=$ffo_dpll, python=$ffo_python)"
-					echo "  DPLL output: $dpll_json"
-					echo "  Python output: $python_output"
-				fi
+				print_result FAIL "$test_name (mismatch: dpll=$ffo_dpll, python=$ffo_python)"
+				echo "  Python output: $python_output"
 			fi
-			break
 		fi
-	done
-
-	if [ $found_ffo -eq 0 ]; then
+	else
 		print_result SKIP "fractional-frequency-offset test (no pin with this attribute)"
 	fi
 
 	# Test 2: phase-offset (s64 type) in parent-device context
+	dpll_load_pins
 	local found_phase_offset=0
-	for ((i=0; i<pin_count; i++)); do
-		local pin_id=$(jq -r ".pin[$i].id" "$dpll_json" 2>/dev/null)
-		local parent_count=$(jq -r ".pin[$i].\"parent-device\" | length" "$dpll_json" 2>/dev/null || echo 0)
+
+	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
+		local parent_count=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["parent-device"] | length' 2>> "$ERROR_LOG" || echo 0)
 
 		if [ "$parent_count" -gt 0 ]; then
 			# Check if any parent-device has phase-offset
-			local parent_idx=0
 			for ((j=0; j<parent_count; j++)); do
-				local phase_offset_dpll=$(jq -r ".pin[$i].\"parent-device\"[$j].\"phase-offset\" // empty" "$dpll_json" 2>/dev/null)
+				local phase_offset_dpll=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"parent-device\"[$j].\"phase-offset\" // empty" 2>> "$ERROR_LOG")
 
 				if [ -n "$phase_offset_dpll" ]; then
 					found_phase_offset=1
-					local parent_id=$(jq -r ".pin[$i].\"parent-device\"[$j].\"parent-id\"" "$dpll_json" 2>/dev/null)
+					local parent_id=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"parent-device\"[$j].\"parent-id\"" 2>> "$ERROR_LOG")
 					local test_name="Pin $pin_id parent-device $parent_id: phase-offset (s64) comparison"
 
 					# Get value from Python CLI
@@ -2630,95 +2627,65 @@ test_multi_enum_arrays() {
 		return
 	fi
 
-	local dpll_json="$TEST_DIR/dpll_devices_multi_enum.json"
-	$DPLL_TOOL -j device show > "$dpll_json" 2>/dev/null || true
-	local device_count=$(jq -r '.device | length' "$dpll_json" 2>/dev/null || echo 0)
-
-	if [ "$device_count" -eq 0 ]; then
-		print_result SKIP "multi-enum array tests (no devices available)"
-		echo ""
-		return
-	fi
-
 	# Test 1: mode-supported multi-enum array
-	local found_mode_supported=0
-	for ((i=0; i<device_count; i++)); do
-		local device_id=$(jq -r ".device[$i].id" "$dpll_json" 2>/dev/null)
-		local mode_supported_count=$(jq -r ".device[$i].\"mode-supported\" | length" "$dpll_json" 2>/dev/null || echo 0)
+	local device_id=$(dpll_find_device --with-attr "mode-supported")
 
-		if [ "$mode_supported_count" -gt 0 ]; then
-			found_mode_supported=1
-			local test_name="Device $device_id: mode-supported array comparison"
+	if [ -n "$device_id" ]; then
+		local test_name="Device $device_id: mode-supported array comparison"
+		local mode_supported_count=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"] | length' 2>> "$ERROR_LOG")
+		local modes_dpll=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"] | sort | .[]' 2>> "$ERROR_LOG" | tr '\n' ' ')
 
-			# Get sorted array from dpll tool
-			local modes_dpll=$(jq -r ".device[$i].\"mode-supported\" | sort | .[]" "$dpll_json" 2>/dev/null | tr '\n' ' ')
+		# Get value from Python CLI
+		local python_output="$TEST_DIR/python_device_${device_id}_modes.json"
+		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
-			# Get value from Python CLI
-			local python_output="$TEST_DIR/python_device_${device_id}_modes.json"
-			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+		local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+		if [ "$python_error" = "yes" ]; then
+			print_result SKIP "$test_name (Python CLI returned error)"
+		else
+			local modes_python=$(jq -r '.["mode-supported"] | sort | .[]' "$python_output" 2>/dev/null | tr '\n' ' ')
 
-			local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-			if [ "$python_error" = "yes" ]; then
-				print_result SKIP "$test_name (Python CLI returned error)"
+			if [ -z "$modes_python" ]; then
+				print_result SKIP "$test_name (Python CLI missing attribute)"
+			elif [ "$modes_dpll" = "$modes_python" ]; then
+				print_result PASS "$test_name (count=$mode_supported_count, match)"
 			else
-				local modes_python=$(jq -r ".\"mode-supported\" | sort | .[]" "$python_output" 2>/dev/null | tr '\n' ' ')
-
-				if [ -z "$modes_python" ]; then
-					print_result SKIP "$test_name (Python CLI missing attribute)"
-				elif [ "$modes_dpll" = "$modes_python" ]; then
-					print_result PASS "$test_name (count=$mode_supported_count, match)"
-				else
-					print_result FAIL "$test_name (mismatch: dpll=[$modes_dpll], python=[$modes_python])"
-					echo "  DPLL output: $dpll_json"
-					echo "  Python output: $python_output"
-				fi
+				print_result FAIL "$test_name (mismatch: dpll=[$modes_dpll], python=[$modes_python])"
+				echo "  Python output: $python_output"
 			fi
-			break
 		fi
-	done
-
-	if [ $found_mode_supported -eq 0 ]; then
+	else
 		print_result SKIP "mode-supported test (no device with this attribute)"
 	fi
 
 	# Test 2: clock-quality-level multi-enum array
-	local found_clock_quality=0
-	for ((i=0; i<device_count; i++)); do
-		local device_id=$(jq -r ".device[$i].id" "$dpll_json" 2>/dev/null)
-		local cql_count=$(jq -r ".device[$i].\"clock-quality-level\" | length" "$dpll_json" 2>/dev/null || echo 0)
+	device_id=$(dpll_find_device --with-attr "clock-quality-level")
 
-		if [ "$cql_count" -gt 0 ]; then
-			found_clock_quality=1
-			local test_name="Device $device_id: clock-quality-level array comparison"
+	if [ -n "$device_id" ]; then
+		local test_name="Device $device_id: clock-quality-level array comparison"
+		local cql_count=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["clock-quality-level"] | length' 2>> "$ERROR_LOG")
+		local cql_dpll=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["clock-quality-level"] | sort | .[]' 2>> "$ERROR_LOG" | tr '\n' ' ')
 
-			# Get sorted array from dpll tool
-			local cql_dpll=$(jq -r ".device[$i].\"clock-quality-level\" | sort | .[]" "$dpll_json" 2>/dev/null | tr '\n' ' ')
+		# Get value from Python CLI
+		local python_output="$TEST_DIR/python_device_${device_id}_cql.json"
+		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
-			# Get value from Python CLI
-			local python_output="$TEST_DIR/python_device_${device_id}_cql.json"
-			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+		local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+		if [ "$python_error" = "yes" ]; then
+			print_result SKIP "$test_name (Python CLI returned error)"
+		else
+			local cql_python=$(jq -r '.["clock-quality-level"] | sort | .[]' "$python_output" 2>/dev/null | tr '\n' ' ')
 
-			local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-			if [ "$python_error" = "yes" ]; then
-				print_result SKIP "$test_name (Python CLI returned error)"
+			if [ -z "$cql_python" ]; then
+				print_result SKIP "$test_name (Python CLI missing attribute)"
+			elif [ "$cql_dpll" = "$cql_python" ]; then
+				print_result PASS "$test_name (count=$cql_count, match)"
 			else
-				local cql_python=$(jq -r ".\"clock-quality-level\" | sort | .[]" "$python_output" 2>/dev/null | tr '\n' ' ')
-
-				if [ -z "$cql_python" ]; then
-					print_result SKIP "$test_name (Python CLI missing attribute)"
-				elif [ "$cql_dpll" = "$cql_python" ]; then
-					print_result PASS "$test_name (count=$cql_count, match)"
-				else
-					print_result FAIL "$test_name (mismatch: dpll=[$cql_dpll], python=[$cql_python])"
-					echo "  DPLL output: $dpll_json"
-					echo "  Python output: $python_output"
-				fi
+				print_result FAIL "$test_name (mismatch: dpll=[$cql_dpll], python=[$cql_python])"
+				echo "  Python output: $python_output"
 			fi
-			break
 		fi
-	done
-
-	if [ $found_clock_quality -eq 0 ]; then
+	else
 		print_result SKIP "clock-quality-level test (no device with this attribute)"
 	fi
 
