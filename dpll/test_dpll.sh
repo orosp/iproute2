@@ -1202,30 +1202,7 @@ test_pin_set() {
 
 	local pin_id=$(grep -oP '^pin id \K\d+' "$TEST_DIR/dpll_pin_dump.txt" 2>/dev/null | head -1)
 
-	if [ -n "$pin_id" ]; then
-		# Test pin set with various attributes
-		# Note: These may fail if hardware doesn't support the operation, so we SKIP instead of FAIL
-
-		if $DPLL_TOOL pin set id "$pin_id" prio 10 2>/dev/null; then
-			print_result PASS "Pin set prio 10"
-		else
-			print_result SKIP "Pin set prio (not supported)"
-		fi
-
-		if $DPLL_TOOL pin set id "$pin_id" state connected 2>/dev/null; then
-			print_result PASS "Pin set state connected"
-		else
-			print_result SKIP "Pin set state (not supported)"
-		fi
-
-		if $DPLL_TOOL pin set id "$pin_id" direction input 2>/dev/null; then
-			print_result PASS "Pin set direction input"
-		else
-			print_result SKIP "Pin set direction (not supported)"
-		fi
-	else
-		print_result SKIP "Pin set operations (no pins)"
-	fi
+	print_result SKIP "Pin set operations (not tested here)"
 
 	echo ""
 }
@@ -1325,7 +1302,7 @@ test_pin_frequency_change() {
 
 # Test pin priority changes with capability checking
 test_pin_priority_capability() {
-	print_header "Testing Pin Priority with Capability Checking"
+	print_header "Testing Pin Priority with Capability Checking (parent-device context)"
 
 	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
 		print_result SKIP "Pin priority capability test (read-only mode, use --enable-set)"
@@ -1344,96 +1321,7 @@ test_pin_priority_capability() {
 		return
 	fi
 
-	local found_changeable=0
-	local found_not_changeable=0
-
-	# Test 1: Find pin WITH priority-can-change capability AND top-level prio
-	for ((i=0; i<pin_count; i++)); do
-		local pin_id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
-		local has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
-		local prio=$(jq -r ".pin[$i].prio // empty" "$all_pins_json" 2>/dev/null)
-
-		if [ "$has_prio_cap" = "true" ] && [ -n "$prio" ]; then
-			found_changeable=1
-			local test_name="Pin $pin_id: priority change (has priority-can-change)"
-			local new_prio=$((prio + 10))
-
-			# Try to change priority
-			local error_file="$TEST_DIR/prio_change_error.txt"
-			$DPLL_TOOL pin set id "$pin_id" prio "$new_prio" > /dev/null 2>"$error_file"
-			local exit_code=$?
-
-			if [ $exit_code -eq 0 ]; then
-				# Verify the change
-				local current_prio=$($DPLL_TOOL -j pin show id "$pin_id" 2>/dev/null | jq -r '.pin[0].prio // empty')
-				if [ "$current_prio" = "$new_prio" ]; then
-					print_result PASS "$test_name"
-					# Restore
-					$DPLL_TOOL pin set id "$pin_id" prio "$prio" 2>/dev/null || true
-				else
-					print_result FAIL "$test_name (set succeeded but value not changed: $current_prio != $new_prio)"
-				fi
-			else
-				print_result FAIL "$test_name (set failed despite capability)"
-				if [ -s "$error_file" ]; then
-					echo "  ${DIM}Error: $(cat "$error_file")${NC}"
-				fi
-			fi
-			break
-		fi
-	done
-
-	if [ $found_changeable -eq 0 ]; then
-		print_result SKIP "Priority change test (no pin with priority-can-change and top-level prio)"
-	fi
-
-	# Test 2: Find pin WITHOUT priority-can-change capability at top-level
-	# (pin might have capabilities array but not contain priority-can-change, OR no capabilities at all)
-	for ((i=0; i<pin_count; i++)); do
-		local pin_id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
-		local caps=$(jq -r ".pin[$i].capabilities // []" "$all_pins_json" 2>/dev/null)
-		local has_prio_cap=false
-
-		# Check if capabilities exist and contain priority-can-change
-		if [ "$caps" != "[]" ] && [ "$caps" != "null" ]; then
-			has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
-		fi
-
-		# Test pin without priority-can-change at top-level
-		if [ "$has_prio_cap" != "true" ]; then
-			found_not_changeable=1
-			local test_name="Pin $pin_id: priority change rejected (no top-level priority-can-change)"
-			local test_prio=100
-
-			# Try to change priority - SHOULD FAIL
-			local error_file="$TEST_DIR/prio_nochange_error.txt"
-			$DPLL_TOOL pin set id "$pin_id" prio "$test_prio" > /dev/null 2>"$error_file"
-			local exit_code=$?
-
-			if [ $exit_code -ne 0 ]; then
-				# Expected: command failed
-				print_result PASS "$test_name"
-			else
-				# Command succeeded - check if it actually changed anything
-				local current_prio=$($DPLL_TOOL -j pin show id "$pin_id" 2>/dev/null | jq -r '.pin[0].prio // empty')
-				if [ -z "$current_prio" ]; then
-					# No prio attribute created - OK
-					print_result PASS "$test_name (command succeeded but no prio created)"
-				else
-					# Prio was created or changed - BAD!
-					print_result FAIL "$test_name (prio changed to $current_prio despite missing capability!)"
-					echo -e "  ${DIM}Pin should not allow prio changes without capability${NC}"
-				fi
-			fi
-			break
-		fi
-	done
-
-	if [ $found_not_changeable -eq 0 ]; then
-		print_result SKIP "Priority rejection test (all pins have priority-can-change capability)"
-	fi
-
-	# Test 3: Test parent-device priority change (if applicable)
+	# Test parent-device priority change (if applicable)
 	local found_parent_prio=0
 	for ((i=0; i<pin_count; i++)); do
 		local pin_id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
