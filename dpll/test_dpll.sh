@@ -2356,6 +2356,162 @@ test_multi_enum_arrays() {
 	echo ""
 }
 
+# Test complete pin output comparison (all fields and values)
+test_pin_complete_comparison() {
+	print_header "Testing Complete Pin Output Comparison (dpll vs Python CLI)"
+
+	if [ -z "$PYTHON_CLI" ]; then
+		print_result SKIP "complete pin comparison (Python CLI not available)"
+		echo ""
+		return
+	fi
+
+	if ! command -v jq &>/dev/null; then
+		print_result SKIP "complete pin comparison (jq not available)"
+		echo ""
+		return
+	fi
+
+	local dpll_json="$TEST_DIR/dpll_pins_complete.json"
+	$DPLL_TOOL -j pin show > "$dpll_json" 2>/dev/null || true
+	local pin_count=$(jq -r '.pin | length' "$dpll_json" 2>/dev/null || echo 0)
+
+	if [ "$pin_count" -eq 0 ]; then
+		print_result SKIP "complete pin comparison (no pins available)"
+		echo ""
+		return
+	fi
+
+	# Pick a random pin
+	local random_index=$((RANDOM % pin_count))
+	local pin_id=$(jq -r ".pin[$random_index].id" "$dpll_json" 2>/dev/null)
+
+	local test_name="Pin $pin_id: complete output comparison (all fields)"
+
+	# Get pin from dpll tool
+	local dpll_output="$TEST_DIR/dpll_pin_${pin_id}_complete.json"
+	$DPLL_TOOL -j pin show id "$pin_id" > "$dpll_output" 2>&1 || true
+
+	# Get pin from Python CLI
+	local python_output="$TEST_DIR/python_pin_${pin_id}_complete.json"
+	python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
+
+	# Check for errors
+	local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+	local dpll_has_error_msg=$(grep -q "Failed to get\|Failed to dump" "$dpll_output" 2>/dev/null && echo "yes" || echo "no")
+	local dpll_json_content=$(grep -o '{.*}' "$dpll_output" 2>/dev/null | tr -d '[:space:]')
+	local dpll_error="no"
+	if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
+		dpll_error="yes"
+	fi
+
+	if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+		print_result SKIP "$test_name (both tools returned error)"
+	elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
+		print_result FAIL "$test_name (error mismatch: dpll=$dpll_error, python=$python_error)"
+		echo "  DPLL output: $dpll_output"
+		echo "  Python output: $python_output"
+	else
+		# Normalize and compare: dpll tool wraps in {pin:[{...}]}, Python CLI returns {...} directly
+		local dpll_normalized=$(jq -S '.pin[0] // . | walk(if type == "array" then sort else . end)' "$dpll_output" 2>/dev/null)
+		local python_normalized=$(jq -S 'walk(if type == "array" then sort else . end)' "$python_output" 2>/dev/null)
+
+		if [ -z "$dpll_normalized" ] || [ -z "$python_normalized" ]; then
+			print_result FAIL "$test_name (invalid JSON)"
+			echo "  DPLL output: $dpll_output"
+			echo "  Python output: $python_output"
+		elif [ "$dpll_normalized" = "$python_normalized" ]; then
+			print_result PASS "$test_name"
+		else
+			print_result FAIL "$test_name (output mismatch)"
+			echo "  DPLL output: $dpll_output"
+			echo "  Python output: $python_output"
+			echo "  Diff (normalized JSON):"
+			diff -u <(echo "$dpll_normalized" | jq .) <(echo "$python_normalized" | jq .) || true
+		fi
+	fi
+
+	echo ""
+}
+
+# Test complete device output comparison (all fields and values)
+test_device_complete_comparison() {
+	print_header "Testing Complete Device Output Comparison (dpll vs Python CLI)"
+
+	if [ -z "$PYTHON_CLI" ]; then
+		print_result SKIP "complete device comparison (Python CLI not available)"
+		echo ""
+		return
+	fi
+
+	if ! command -v jq &>/dev/null; then
+		print_result SKIP "complete device comparison (jq not available)"
+		echo ""
+		return
+	fi
+
+	local dpll_json="$TEST_DIR/dpll_devices_complete.json"
+	$DPLL_TOOL -j device show > "$dpll_json" 2>/dev/null || true
+	local device_count=$(jq -r '.device | length' "$dpll_json" 2>/dev/null || echo 0)
+
+	if [ "$device_count" -eq 0 ]; then
+		print_result SKIP "complete device comparison (no devices available)"
+		echo ""
+		return
+	fi
+
+	# Pick a random device
+	local random_index=$((RANDOM % device_count))
+	local device_id=$(jq -r ".device[$random_index].id" "$dpll_json" 2>/dev/null)
+
+	local test_name="Device $device_id: complete output comparison (all fields)"
+
+	# Get device from dpll tool
+	local dpll_output="$TEST_DIR/dpll_device_${device_id}_complete.json"
+	$DPLL_TOOL -j device show id "$device_id" > "$dpll_output" 2>&1 || true
+
+	# Get device from Python CLI
+	local python_output="$TEST_DIR/python_device_${device_id}_complete.json"
+	python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
+
+	# Check for errors
+	local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
+	local dpll_has_error_msg=$(grep -q "Failed to get\|Failed to dump" "$dpll_output" 2>/dev/null && echo "yes" || echo "no")
+	local dpll_json_content=$(grep -o '{.*}' "$dpll_output" 2>/dev/null | tr -d '[:space:]')
+	local dpll_error="no"
+	if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
+		dpll_error="yes"
+	fi
+
+	if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+		print_result SKIP "$test_name (both tools returned error)"
+	elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
+		print_result FAIL "$test_name (error mismatch: dpll=$dpll_error, python=$python_error)"
+		echo "  DPLL output: $dpll_output"
+		echo "  Python output: $python_output"
+	else
+		# Normalize and compare: dpll tool wraps in {device:[{...}]}, Python CLI returns {...} directly
+		local dpll_normalized=$(jq -S '.device[0] // . | walk(if type == "array" then sort else . end)' "$dpll_output" 2>/dev/null)
+		local python_normalized=$(jq -S 'walk(if type == "array" then sort else . end)' "$python_output" 2>/dev/null)
+
+		if [ -z "$dpll_normalized" ] || [ -z "$python_normalized" ]; then
+			print_result FAIL "$test_name (invalid JSON)"
+			echo "  DPLL output: $dpll_output"
+			echo "  Python output: $python_output"
+		elif [ "$dpll_normalized" = "$python_normalized" ]; then
+			print_result PASS "$test_name"
+		else
+			print_result FAIL "$test_name (output mismatch)"
+			echo "  DPLL output: $dpll_output"
+			echo "  Python output: $python_output"
+			echo "  Diff (normalized JSON):"
+			diff -u <(echo "$dpll_normalized" | jq .) <(echo "$python_normalized" | jq .) || true
+		fi
+	fi
+
+	echo ""
+}
+
 # Test error handling
 test_error_handling() {
 	print_header "Testing Error Handling"
@@ -2542,6 +2698,8 @@ main() {
 	test_error_handling
 	test_s64_sint_values
 	test_multi_enum_arrays
+	test_pin_complete_comparison
+	test_device_complete_comparison
 
 	print_summary
 }
