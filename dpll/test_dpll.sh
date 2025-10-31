@@ -545,26 +545,43 @@ dpll_assert_not_empty() {
 # Usage: dpll_test_pin_freq_change
 dpll_test_pin_freq_change() {
 	# Note: frequency-can-change capability doesn't exist in DPLL spec
-	local pin_id=$(dpll_find_pin --with-attr "frequency-supported")
+	dpll_load_pins || return 1
+
+	# Find suitable pin with frequency-supported and at least 2 frequencies
+	local pin_id=""
+	for pid in "${!DPLL_PIN_CACHE[@]}"; do
+		if ! dpll_pin_has_attr "$pid" "frequency"; then
+			continue
+		fi
+
+		if ! dpll_pin_has_attr "$pid" "frequency-supported"; then
+			continue
+		fi
+
+		local supported_count=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.["frequency-supported"] | length' 2>> "$ERROR_LOG")
+		if [ "$supported_count" -ge 2 ]; then
+			pin_id="$pid"
+			break
+		fi
+	done
 
 	if [ -z "$pin_id" ]; then
-		print_result SKIP "Pin frequency change (no pin with frequency-supported)"
-		return 0
-	fi
-
-	# Verify pin has frequency attribute
-	if ! dpll_pin_has_attr "$pin_id" "frequency"; then
-		print_result SKIP "Pin frequency change (no frequency attribute)"
+		print_result SKIP "Pin frequency change (no pin with multiple supported frequencies)"
 		return 0
 	fi
 
 	local current_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
 	dpll_assert_not_empty "Pin $pin_id has current frequency" "$current_freq" || return 1
 
-	# Get alternative frequency
+	# Get alternative frequency (try second in list)
 	local freq_min=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
+	if [ -z "$freq_min" ] || [ "$freq_min" = "$current_freq" ]; then
+		# Try first frequency if second doesn't work
+		freq_min=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][0]."frequency-min" // empty' 2>> "$ERROR_LOG")
+	fi
+
 	if [ -z "$freq_min" ]; then
-		print_result SKIP "Pin $pin_id frequency change (no alternative frequency)"
+		print_result SKIP "Pin $pin_id frequency change (invalid target frequency)"
 		return 0
 	fi
 
