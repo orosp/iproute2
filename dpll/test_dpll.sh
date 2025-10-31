@@ -1641,7 +1641,7 @@ test_pin_set() {
 	echo ""
 }
 
-# Test pin frequency change
+# Test pin frequency change (refactored to use DPLL API)
 test_pin_frequency_change() {
 	print_header "Testing Pin Frequency Change"
 
@@ -1651,90 +1651,56 @@ test_pin_frequency_change() {
 		return
 	fi
 
-	if ! command -v jq &>/dev/null; then
-		print_result SKIP "Pin frequency change (jq not available)"
+	# Find pin with frequency-supported and frequency-can-change capability
+	local pin_id=$(dpll_find_pin --with-attr "frequency-supported" --with-capability "frequency-can-change")
+
+	if [ -z "$pin_id" ]; then
+		print_result SKIP "Pin frequency change (no suitable pin found)"
 		echo ""
 		return
 	fi
 
-	# Get all pins with frequency support
-	local pins_json="$TEST_DIR/dpll_pin_dump.json"
-	if [ ! -f "$pins_json" ]; then
-		$DPLL_TOOL -j pin show > "$pins_json" 2>&1 || true
+	# Get current frequency
+	local current_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
+	if [ -z "$current_freq" ]; then
+		print_result SKIP "Pin $pin_id frequency change (no current frequency)"
+		echo ""
+		return
 	fi
 
-	# Find pins that have both frequency and frequency-supported
-	local pin_count=$(jq -r '.pin | length' "$pins_json" 2>/dev/null || echo 0)
-	local tested=0
+	# Find alternative frequency (try second supported frequency)
+	local target_freq=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
 
-	for ((i=0; i<pin_count; i++)); do
-		local pin_id=$(jq -r ".pin[$i].id" "$pins_json" 2>/dev/null)
-		local current_freq=$(jq -r ".pin[$i].frequency // empty" "$pins_json" 2>/dev/null)
-		local freq_supported=$(jq -r ".pin[$i][\"frequency-supported\"] // empty" "$pins_json" 2>/dev/null)
+	if [ -z "$target_freq" ]; then
+		print_result SKIP "Pin $pin_id frequency change (no alternative frequency)"
+		echo ""
+		return
+	fi
 
-		# Skip if no frequency or no frequency-supported
-		if [ -z "$current_freq" ] || [ "$current_freq" == "null" ] || [ -z "$freq_supported" ] || [ "$freq_supported" == "null" ]; then
-			continue
-		fi
+	# Perform frequency change test
+	local test_name="Pin $pin_id frequency change $current_freq -> $target_freq"
 
-		# Get list of supported frequencies (extract min-max pairs)
-		local supported_freqs=$(jq -r ".pin[$i][\"frequency-supported\"][]? | \"\(.\"frequency-min\") \(.\"frequency-max\")\"" "$pins_json" 2>/dev/null)
+	if dpll_pin_set "$pin_id" frequency "$target_freq"; then
+		# Verify the change
+		local new_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
 
-		# Find a different frequency to set (use first available that's not current)
-		local target_freq=""
-		while IFS=' ' read -r freq_min freq_max; do
-			# Try min value first
-			if [ "$freq_min" != "$current_freq" ]; then
-				target_freq="$freq_min"
-				break
-			fi
-			# Try max value if different
-			if [ "$freq_max" != "$current_freq" ] && [ "$freq_max" != "$freq_min" ]; then
-				target_freq="$freq_max"
-				break
-			fi
-		done <<< "$supported_freqs"
-
-		# Skip if we couldn't find a different frequency
-		if [ -z "$target_freq" ]; then
-			continue
-		fi
-
-		tested=$((tested + 1))
-
-		# Try to set the frequency
-		local test_name="Pin $pin_id frequency change $current_freq -> $target_freq"
-		local cmd="$DPLL_TOOL pin set id $pin_id frequency $target_freq"
-
-		if run_test_command "$test_name" "$cmd 2>/dev/null"; then
+		if [ "$new_freq" = "$target_freq" ]; then
 			print_result PASS "$test_name"
-
-			# Verify the change
-			local new_freq=$($DPLL_TOOL -j pin show id "$pin_id" 2>/dev/null | jq -r '.frequency // empty')
-			if [ "$new_freq" == "$target_freq" ]; then
-				echo -e "  ${GREEN}✓${NC} Frequency successfully changed and verified"
-			else
-				echo -e "  ${YELLOW}⚠${NC} Frequency set succeeded but verification shows: $new_freq"
-			fi
-
-			# Restore original frequency
-			$DPLL_TOOL pin set id "$pin_id" frequency "$current_freq" 2>/dev/null || true
+			echo -e "  ${GREEN}✓${NC} Frequency successfully changed and verified"
 		else
-			print_result SKIP "$test_name (not supported or failed)"
+			print_result FAIL "$test_name (expected: $target_freq, got: $new_freq)"
 		fi
 
-		# Only test first pin with frequency support
-		break
-	done
-
-	if [ $tested -eq 0 ]; then
-		print_result SKIP "Pin frequency change (no pins with frequency-supported found)"
+		# Restore original frequency
+		dpll_pin_set "$pin_id" frequency "$current_freq" >> "$ERROR_LOG" 2>&1
+	else
+		print_result FAIL "$test_name (set command failed)"
 	fi
 
 	echo ""
 }
 
-# Test pin priority changes with capability checking
+# Test pin priority changes with capability checking (refactored to use DPLL API)
 test_pin_priority_capability() {
 	print_header "Testing Pin Priority with Capability Checking (parent-device context)"
 
@@ -1744,79 +1710,48 @@ test_pin_priority_capability() {
 		return
 	fi
 
-	# Get all pins
-	local all_pins_json="$TEST_DIR/pin_prio_test.json"
-	$DPLL_TOOL -j pin show > "$all_pins_json" 2>/dev/null || true
-	local pin_count=$(jq -r '.pin | length' "$all_pins_json" 2>/dev/null || echo 0)
+	# Find pin with priority-can-change capability and parent-device
+	local pin_id=$(dpll_find_pin --with-capability "priority-can-change" --with-attr "parent-device")
 
-	if [ "$pin_count" -eq 0 ]; then
-		print_result SKIP "Pin priority capability test (no pins available)"
+	if [ -z "$pin_id" ]; then
+		print_result SKIP "Parent-device priority change test (no suitable pin found)"
 		echo ""
 		return
 	fi
 
-	# Test parent-device priority change (if applicable)
-	local found_parent_prio=0
-	for ((i=0; i<pin_count; i++)); do
-		local pin_id=$(jq -r ".pin[$i].id" "$all_pins_json" 2>/dev/null)
-		local has_prio_cap=$(jq -r ".pin[$i].capabilities | contains([\"priority-can-change\"])" "$all_pins_json" 2>/dev/null)
-		local parent_count=$(jq -r ".pin[$i].\"parent-device\" | length" "$all_pins_json" 2>/dev/null || echo 0)
+	# Get parent-device info from cache
+	local parent_id=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["parent-device"][0]."parent-id" // empty' 2>> "$ERROR_LOG")
+	local parent_prio=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["parent-device"][0].prio // empty' 2>> "$ERROR_LOG")
 
-		if [ "$has_prio_cap" = "true" ] && [ "$parent_count" -gt 0 ]; then
-			# Get first parent-device with prio
-			local parent_id=$(jq -r ".pin[$i].\"parent-device\"[0].\"parent-id\" // empty" "$all_pins_json" 2>/dev/null)
-			local parent_prio=$(jq -r ".pin[$i].\"parent-device\"[0].prio // empty" "$all_pins_json" 2>/dev/null)
+	if [ -z "$parent_id" ] || [ -z "$parent_prio" ]; then
+		print_result SKIP "Pin $pin_id priority test (no parent-device prio)"
+		echo ""
+		return
+	fi
 
-			if [ -n "$parent_id" ] && [ -n "$parent_prio" ]; then
-				found_parent_prio=1
-				local test_name="Pin $pin_id: parent-device $parent_id priority change"
-				local new_prio=$((parent_prio + 5))
+	# Test priority change
+	local test_name="Pin $pin_id: parent-device $parent_id priority change"
+	local new_prio=$((parent_prio + 5))
 
-				# Try to change parent-device priority
-				local error_file="$TEST_DIR/parent_prio_error.txt"
-				$DPLL_TOOL pin set id "$pin_id" parent-device "$parent_id" prio "$new_prio" > /dev/null 2>"$error_file"
-				local exit_code=$?
+	if dpll_pin_set "$pin_id" parent-device "$parent_id" prio "$new_prio"; then
+		# Verify the change
+		sleep 1  # Give time for kernel to update
+		dpll_invalidate_cache
+		dpll_load_pins
 
-				if [ $exit_code -eq 0 ]; then
-					# Verify the change
-					sleep 1  # Give time for kernel to update
-					local verify_json="$TEST_DIR/parent_prio_verify.json"
-					$DPLL_TOOL -j pin show id "$pin_id" > "$verify_json" 2>/dev/null
+		local current_prio=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id) | .prio // empty" 2>> "$ERROR_LOG")
 
-					# NOTE: 'pin show id X' returns {id:..., parent-device:[...]}, NOT {pin:[{...}]}
-					# So we use top-level queries, not .pin[0]
-					local has_parent=$(jq -r ".\"parent-device\" // null" "$verify_json" 2>/dev/null)
-					if [ "$has_parent" = "null" ]; then
-						print_result FAIL "$test_name (parent-device disappeared after set)"
-					else
-						# Find the specific parent-device entry
-						local current_prio=$(jq -r ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id) | .prio // empty" "$verify_json" 2>/dev/null)
-
-						if [ -z "$current_prio" ]; then
-							print_result FAIL "$test_name (cannot read prio after set - parent-device not found)"
-							echo -e "  ${DIM}Looking for parent-id: $parent_id${NC}"
-							echo -e "  ${DIM}Available parent-ids: $(jq -r '."parent-device"[]."parent-id"' "$verify_json" 2>/dev/null | tr '\n' ' ')${NC}"
-						elif [ "$current_prio" = "$new_prio" ]; then
-							print_result PASS "$test_name"
-							# Restore
-							$DPLL_TOOL pin set id "$pin_id" parent-device "$parent_id" prio "$parent_prio" 2>/dev/null || true
-						else
-							print_result FAIL "$test_name (set succeeded but value not changed: got '$current_prio', expected '$new_prio')"
-						fi
-					fi
-				else
-					print_result FAIL "$test_name (set failed despite capability)"
-					if [ -s "$error_file" ]; then
-						echo -e "  ${DIM}Error: $(cat "$error_file")${NC}"
-					fi
-				fi
-				break
-			fi
+		if [ -z "$current_prio" ]; then
+			print_result FAIL "$test_name (cannot read prio after set)"
+		elif [ "$current_prio" = "$new_prio" ]; then
+			print_result PASS "$test_name"
+			# Restore original priority
+			dpll_pin_set "$pin_id" parent-device "$parent_id" prio "$parent_prio" >> "$ERROR_LOG" 2>&1
+		else
+			print_result FAIL "$test_name (expected: $new_prio, got: $current_prio)"
 		fi
-	done
-
-	if [ $found_parent_prio -eq 0 ]; then
-		print_result SKIP "Parent-device priority change test (no suitable pin found)"
+	else
+		print_result FAIL "$test_name (set command failed)"
 	fi
 
 	echo ""
