@@ -544,10 +544,17 @@ dpll_assert_not_empty() {
 # Deklarativní test case pro pin frequency change
 # Usage: dpll_test_pin_freq_change
 dpll_test_pin_freq_change() {
-	local pin_id=$(dpll_find_pin --with-attr "frequency-supported" --with-capability "frequency-can-change")
+	# Note: frequency-can-change capability doesn't exist in DPLL spec
+	local pin_id=$(dpll_find_pin --with-attr "frequency-supported")
 
 	if [ -z "$pin_id" ]; then
-		print_result SKIP "Pin frequency change (no suitable pin found)"
+		print_result SKIP "Pin frequency change (no pin with frequency-supported)"
+		return 0
+	fi
+
+	# Verify pin has frequency attribute
+	if ! dpll_pin_has_attr "$pin_id" "frequency"; then
+		print_result SKIP "Pin frequency change (no frequency attribute)"
 		return 0
 	fi
 
