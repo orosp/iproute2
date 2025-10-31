@@ -821,6 +821,7 @@ static int cmd_device_id_get_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+	int *found = data;
 
 	mnl_attr_parse(nlh, sizeof(*genl), attr_cb, tb);
 
@@ -833,6 +834,8 @@ static int cmd_device_id_get_cb(const struct nlmsghdr *nlh, void *data)
 		} else {
 			printf("%u\n", id);
 		}
+		if (found)
+			*found = 1;
 	}
 
 	return MNL_CB_OK;
@@ -841,6 +844,7 @@ static int cmd_device_id_get_cb(const struct nlmsghdr *nlh, void *data)
 static int cmd_device_id_get(struct dpll *dpll)
 {
 	struct nlmsghdr *nlh;
+	int found = 0;
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_DEVICE_ID_GET,
@@ -873,9 +877,14 @@ static int cmd_device_id_get(struct dpll *dpll)
 		}
 	}
 
-	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_id_get_cb, NULL);
+	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_id_get_cb, &found);
 	if (err < 0) {
 		pr_err("Failed to get device id\n");
+		return -1;
+	}
+
+	if (!found) {
+		pr_err("No device found matching the criteria\n");
 		return -1;
 	}
 
@@ -1711,6 +1720,7 @@ static int cmd_pin_id_get_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
+	int *found = data;
 
 	mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
 
@@ -1721,6 +1731,8 @@ static int cmd_pin_id_get_cb(const struct nlmsghdr *nlh, void *data)
 		} else {
 			printf("%u\n", id);
 		}
+		if (found)
+			*found = 1;
 	}
 
 	return MNL_CB_OK;
@@ -1729,6 +1741,7 @@ static int cmd_pin_id_get_cb(const struct nlmsghdr *nlh, void *data)
 static int cmd_pin_id_get(struct dpll *dpll)
 {
 	struct nlmsghdr *nlh;
+	int found = 0;
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_PIN_ID_GET,
@@ -1772,9 +1785,14 @@ static int cmd_pin_id_get(struct dpll *dpll)
 		}
 	}
 
-	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_id_get_cb, NULL);
+	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_id_get_cb, &found);
 	if (err < 0) {
 		pr_err("Failed to get pin id\n");
+		return -1;
+	}
+
+	if (!found) {
+		pr_err("No pin found matching the criteria\n");
 		return -1;
 	}
 
