@@ -1045,19 +1045,12 @@ test_device_id_get() {
 				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
-				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
-				# dpll error: check for "Failed to get" message OR empty JSON {}
-				local dpll_has_error_msg=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
-				local dpll_json_content=$(grep -o '{.*}' "$dpll_result" 2>/dev/null | tr -d '[:space:]')
-				local dpll_error="no"
-				if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
-					dpll_error="yes"
-				fi
-
-				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+				if dpll_python_has_error "$python_result" && dpll_has_error "$dpll_result"; then
 					print_result PASS "device id-get module-name (vs Python) (both returned error)"
-				elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
-					print_result FAIL "device id-get module-name (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+				elif dpll_python_has_error "$python_result" || dpll_has_error "$dpll_result"; then
+					local dpll_err="no"; dpll_has_error "$dpll_result" && dpll_err="yes"
+					local python_err="no"; dpll_python_has_error "$python_result" && python_err="yes"
+					print_result FAIL "device id-get module-name (vs Python) (error mismatch: dpll=$dpll_err, python=$python_err)"
 					echo "  DPLL command: $DPLL_TOOL -j device id-get module-name \"$module_name\""
 					echo "  DPLL output file: $dpll_result"
 					echo "  DPLL raw content:"
@@ -1109,21 +1102,14 @@ test_device_id_get() {
 				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-id-get --json '{"module-name": "'"$module_name"'", "clock-id": '"$clock_id"'}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
-				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
-				# dpll error: check for "Failed to get" message OR empty JSON {}
-				local dpll_has_error_msg=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
-				local dpll_json_content=$(grep -o '{.*}' "$dpll_result" 2>/dev/null | tr -d '[:space:]')
-				local dpll_error="no"
-				if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
-					dpll_error="yes"
-				fi
-
-				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+				if dpll_python_has_error "$python_result" && dpll_has_error "$dpll_result"; then
 					# Both returned error - this is correct behavior (e.g., multiple matches)
 					print_result PASS "device id-get module-name + clock-id (vs Python) (both returned error)"
-				elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
+				elif dpll_python_has_error "$python_result" || dpll_has_error "$dpll_result"; then
 					# Only one returned error - mismatch
-					print_result FAIL "device id-get module-name + clock-id (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+					local dpll_err="no"; dpll_has_error "$dpll_result" && dpll_err="yes"
+					local python_err="no"; dpll_python_has_error "$python_result" && python_err="yes"
+					print_result FAIL "device id-get module-name + clock-id (vs Python) (error mismatch: dpll=$dpll_err, python=$python_err)"
 					echo "  DPLL command: $DPLL_TOOL -j device id-get module-name \"$module_name\" clock-id \"$clock_id\""
 					echo "  DPLL output file: $dpll_result"
 					echo "  DPLL raw content:"
@@ -1206,19 +1192,12 @@ test_pin_operations() {
 			python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json '{"id": '$pin_id'}' --output-json > "$python_pin_json" 2>&1 || true
 
 			# Check if either tool returned an error
-			local python_error=$(grep -qE "Netlink (warning|error):" "$python_pin_json" 2>/dev/null && echo "yes" || echo "no")
-			# dpll error: check for error message OR empty JSON {}
-			local dpll_has_error_msg=$(grep -q "Failed to get\|Failed to dump" "$dpll_pin_json" 2>/dev/null && echo "yes" || echo "no")
-			local dpll_json_content=$(grep -o '{.*}' "$dpll_pin_json" 2>/dev/null | tr -d '[:space:]')
-			local dpll_error="no"
-			if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
-				dpll_error="yes"
-			fi
-
-			if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+			if dpll_python_has_error "$python_pin_json" && dpll_has_error "$dpll_pin_json"; then
 				print_result PASS "pin show id $pin_id (vs Python) (both returned error)"
-			elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
-				print_result FAIL "pin show id $pin_id (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+			elif dpll_python_has_error "$python_pin_json" || dpll_has_error "$dpll_pin_json"; then
+				local dpll_err="no"; dpll_has_error "$dpll_pin_json" && dpll_err="yes"
+				local python_err="no"; dpll_python_has_error "$python_pin_json" && python_err="yes"
+				print_result FAIL "pin show id $pin_id (vs Python) (error mismatch: dpll=$dpll_err, python=$python_err)"
 				echo "  DPLL command: $DPLL_TOOL -j pin show id \"$pin_id\""
 				echo "  DPLL output file: $dpll_pin_json"
 				echo "  DPLL raw content:"
@@ -1290,19 +1269,12 @@ test_pin_id_get() {
 				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"board-label": "'"$board_label"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
-				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
-				# dpll error: check for "Failed to get" message OR empty JSON {}
-				local dpll_has_error_msg=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
-				local dpll_json_content=$(grep -o '{.*}' "$dpll_result" 2>/dev/null | tr -d '[:space:]')
-				local dpll_error="no"
-				if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
-					dpll_error="yes"
-				fi
-
-				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+				if dpll_python_has_error "$python_result" && dpll_has_error "$dpll_result"; then
 					print_result PASS "pin id-get board-label (vs Python) (both returned error)"
-				elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
-					print_result FAIL "pin id-get board-label (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+				elif dpll_python_has_error "$python_result" || dpll_has_error "$dpll_result"; then
+					local dpll_err="no"; dpll_has_error "$dpll_result" && dpll_err="yes"
+					local python_err="no"; dpll_python_has_error "$python_result" && python_err="yes"
+					print_result FAIL "pin id-get board-label (vs Python) (error mismatch: dpll=$dpll_err, python=$python_err)"
 					echo "  DPLL command: $DPLL_TOOL -j pin id-get board-label \"$board_label\""
 					echo "  DPLL output file: $dpll_result"
 					echo "  DPLL raw content:"
@@ -1351,19 +1323,12 @@ test_pin_id_get() {
 				python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-id-get --json '{"module-name": "'"$module_name"'"}' --output-json > "$python_result" 2>&1 || true
 
 				# Check if either tool returned an error
-				local python_error=$(grep -qE "Netlink (warning|error):" "$python_result" 2>/dev/null && echo "yes" || echo "no")
-				# dpll error: check for "Failed to get" message OR empty JSON {}
-				local dpll_has_error_msg=$(grep -q "Failed to get" "$dpll_result" 2>/dev/null && echo "yes" || echo "no")
-				local dpll_json_content=$(grep -o '{.*}' "$dpll_result" 2>/dev/null | tr -d '[:space:]')
-				local dpll_error="no"
-				if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
-					dpll_error="yes"
-				fi
-
-				if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+				if dpll_python_has_error "$python_result" && dpll_has_error "$dpll_result"; then
 					print_result PASS "pin id-get module-name (vs Python) (both returned error)"
-				elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
-					print_result FAIL "pin id-get module-name (vs Python) (error mismatch: dpll=$dpll_error, python=$python_error)"
+				elif dpll_python_has_error "$python_result" || dpll_has_error "$dpll_result"; then
+					local dpll_err="no"; dpll_has_error "$dpll_result" && dpll_err="yes"
+					local python_err="no"; dpll_python_has_error "$python_result" && python_err="yes"
+					print_result FAIL "pin id-get module-name (vs Python) (error mismatch: dpll=$dpll_err, python=$python_err)"
 					echo "  DPLL command: $DPLL_TOOL -j pin id-get module-name \"$module_name\""
 					echo "  DPLL output file: $dpll_result"
 					echo "  DPLL raw content:"
@@ -2540,8 +2505,7 @@ test_s64_sint_values() {
 		local python_output="$TEST_DIR/python_pin_${pin_id}_ffo.json"
 		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
-		local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-		if [ "$python_error" = "yes" ]; then
+		if dpll_python_has_error "$python_output"; then
 			print_result SKIP "$test_name (Python CLI returned error)"
 		else
 			local ffo_python=$(jq -r ".\"fractional-frequency-offset\" // empty" "$python_output" 2>/dev/null)
@@ -2580,8 +2544,7 @@ test_s64_sint_values() {
 					local python_output="$TEST_DIR/python_pin_${pin_id}_phase.json"
 					python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
-					local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-					if [ "$python_error" = "yes" ]; then
+					if dpll_python_has_error "$python_output"; then
 						print_result SKIP "$test_name (Python CLI returned error)"
 					else
 						# Find the matching parent-device in Python output
@@ -2632,8 +2595,7 @@ test_multi_enum_arrays() {
 		local python_output="$TEST_DIR/python_device_${device_id}_modes.json"
 		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
-		local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-		if [ "$python_error" = "yes" ]; then
+		if dpll_python_has_error "$python_output"; then
 			print_result SKIP "$test_name (Python CLI returned error)"
 		else
 			local modes_python=$(jq -r '.["mode-supported"] | sort | .[]' "$python_output" 2>/dev/null | tr '\n' ' ')
@@ -2663,8 +2625,7 @@ test_multi_enum_arrays() {
 		local python_output="$TEST_DIR/python_device_${device_id}_cql.json"
 		python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
-		local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-		if [ "$python_error" = "yes" ]; then
+		if dpll_python_has_error "$python_output"; then
 			print_result SKIP "$test_name (Python CLI returned error)"
 		else
 			local cql_python=$(jq -r '.["clock-quality-level"] | sort | .[]' "$python_output" 2>/dev/null | tr '\n' ' ')
@@ -2721,18 +2682,12 @@ test_pin_complete_comparison() {
 	python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
 	# Check for errors
-	local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-	local dpll_has_error_msg=$(grep -q "Failed to get\|Failed to dump" "$dpll_output" 2>/dev/null && echo "yes" || echo "no")
-	local dpll_json_content=$(grep -o '{.*}' "$dpll_output" 2>/dev/null | tr -d '[:space:]')
-	local dpll_error="no"
-	if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
-		dpll_error="yes"
-	fi
-
-	if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+	if dpll_python_has_error "$python_output" && dpll_has_error "$dpll_output"; then
 		print_result SKIP "$test_name (both tools returned error)"
-	elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
-		print_result FAIL "$test_name (error mismatch: dpll=$dpll_error, python=$python_error)"
+	elif dpll_python_has_error "$python_output" || dpll_has_error "$dpll_output"; then
+		local dpll_err="no"; dpll_has_error "$dpll_output" && dpll_err="yes"
+		local python_err="no"; dpll_python_has_error "$python_output" && python_err="yes"
+		print_result FAIL "$test_name (error mismatch: dpll=$dpll_err, python=$python_err)"
 		echo "  DPLL output: $dpll_output"
 		echo "  Python output: $python_output"
 	else
@@ -2794,18 +2749,12 @@ test_device_complete_comparison() {
 	python3 "$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
 	# Check for errors
-	local python_error=$(grep -qE "Netlink (warning|error):" "$python_output" 2>/dev/null && echo "yes" || echo "no")
-	local dpll_has_error_msg=$(grep -q "Failed to get\|Failed to dump" "$dpll_output" 2>/dev/null && echo "yes" || echo "no")
-	local dpll_json_content=$(grep -o '{.*}' "$dpll_output" 2>/dev/null | tr -d '[:space:]')
-	local dpll_error="no"
-	if [ "$dpll_has_error_msg" = "yes" ] || [ "$dpll_json_content" = "{}" ]; then
-		dpll_error="yes"
-	fi
-
-	if [ "$python_error" = "yes" ] && [ "$dpll_error" = "yes" ]; then
+	if dpll_python_has_error "$python_output" && dpll_has_error "$dpll_output"; then
 		print_result SKIP "$test_name (both tools returned error)"
-	elif [ "$python_error" = "yes" ] || [ "$dpll_error" = "yes" ]; then
-		print_result FAIL "$test_name (error mismatch: dpll=$dpll_error, python=$python_error)"
+	elif dpll_python_has_error "$python_output" || dpll_has_error "$dpll_output"; then
+		local dpll_err="no"; dpll_has_error "$dpll_output" && dpll_err="yes"
+		local python_err="no"; dpll_python_has_error "$python_output" && python_err="yes"
+		print_result FAIL "$test_name (error mismatch: dpll=$dpll_err, python=$python_err)"
 		echo "  DPLL output: $dpll_output"
 		echo "  Python output: $python_output"
 	else
