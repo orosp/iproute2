@@ -3298,7 +3298,12 @@ test_multi_enum_arrays() {
 
 		# Debug: show what dpll cache contains
 		local cache_file="$TEST_DIR/dpll_device_${device_id}_cache_debug.json"
-		echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq '.' > "$cache_file" 2>&1
+		local cache_value="${DPLL_DEVICE_CACHE[$device_id]}"
+		echo "DEBUG mode-supported test: device_id=$device_id" >> "$ERROR_LOG"
+		echo "DEBUG cache_value length=${#cache_value}" >> "$ERROR_LOG"
+		echo "DEBUG cache_value=${cache_value:0:200}" >> "$ERROR_LOG"
+		echo "DEBUG cache keys: ${!DPLL_DEVICE_CACHE[@]}" >> "$ERROR_LOG"
+		echo "$cache_value" | jq '.' > "$cache_file" 2>&1
 
 		# Also get fresh output from dpll tool
 		local dpll_fresh="$TEST_DIR/dpll_device_${device_id}_fresh.json"
