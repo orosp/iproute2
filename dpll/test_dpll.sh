@@ -2308,9 +2308,9 @@ test_pin_priority_capability() {
 	echo ""
 }
 
-# Test pin type and direction validation
+# Test pin type validation
 test_pin_type_validation() {
-	print_header "Testing Pin Type and Direction Validation"
+	print_header "Testing Pin Type Validation"
 
 	dpll_load_pins || return
 
@@ -2342,35 +2342,10 @@ test_pin_type_validation() {
 		print_result PASS "Validated $pass_count/$tested_count pin types"
 	fi
 
-	# Test 2: Validate pin direction values
-	tested_count=0
-	pass_count=0
+	# Note: Direction is not a top-level pin attribute - it's part of parent-device
+	# relationships and is validated in test_pin_parent_device_attributes()
 
-	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
-		if dpll_pin_has_attr "$pin_id" "direction"; then
-			local direction=$(dpll_get_pin_attr "$pin_id" "direction")
-			tested_count=$((tested_count + 1))
-
-			# Validate direction is one of valid enum values
-			case "$direction" in
-				input|output)
-					print_result PASS "Pin $pin_id direction is valid: $direction"
-					pass_count=$((pass_count + 1))
-					;;
-				*)
-					print_result FAIL "Pin $pin_id direction has invalid value: $direction"
-					;;
-			esac
-		fi
-	done
-
-	if [ $tested_count -eq 0 ]; then
-		print_result SKIP "Pin direction validation (no pins with direction attribute)"
-	else
-		print_result PASS "Validated $pass_count/$tested_count pin directions"
-	fi
-
-	# Test 3: Compare types with Python CLI
+	# Test 2: Compare types with Python CLI
 	if [ -n "$PYTHON_CLI" ]; then
 		local pin_id=$(dpll_find_pin --with-attr "type")
 		if [ -n "$pin_id" ]; then
