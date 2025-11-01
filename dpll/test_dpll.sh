@@ -3290,6 +3290,15 @@ test_multi_enum_arrays() {
 
 	if [ -n "$device_id" ]; then
 		local test_name="Device $device_id: mode-supported array comparison"
+
+		# Debug: show what dpll cache contains
+		local cache_file="$TEST_DIR/dpll_device_${device_id}_cache_debug.json"
+		echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq '.' > "$cache_file" 2>&1
+
+		# Also get fresh output from dpll tool
+		local dpll_fresh="$TEST_DIR/dpll_device_${device_id}_fresh.json"
+		$DPLL_TOOL -j device show id $device_id > "$dpll_fresh" 2>&1
+
 		local mode_supported_count=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"] | length' 2>> "$ERROR_LOG")
 		local modes_dpll=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"] | sort | .[]' 2>> "$ERROR_LOG" | tr '\n' ' ')
 
@@ -3308,6 +3317,8 @@ test_multi_enum_arrays() {
 				print_result PASS "$test_name (count=$mode_supported_count, match)"
 			else
 				print_result FAIL "$test_name (mismatch: dpll=[$modes_dpll], python=[$modes_python])"
+				echo "  DPLL cache: $cache_file"
+				echo "  DPLL fresh: $dpll_fresh"
 				echo "  Python output: $python_output"
 			fi
 		fi
