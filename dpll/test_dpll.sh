@@ -2323,9 +2323,9 @@ test_pin_type_validation() {
 			local pin_type=$(dpll_get_pin_attr "$pin_id" "type")
 			tested_count=$((tested_count + 1))
 
-			# Validate type is one of valid enum values
+			# Validate type is one of valid enum values (lowercase with hyphens)
 			case "$pin_type" in
-				MUX|EXT|SYNCE_ETH_PORT|INT_OSCILLATOR|GNSS)
+				mux|ext|synce-eth-port|int-oscillator|gnss)
 					print_result PASS "Pin $pin_id type is valid: $pin_type"
 					pass_count=$((pass_count + 1))
 					;;
