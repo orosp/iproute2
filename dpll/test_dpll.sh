@@ -2838,26 +2838,11 @@ test_monitor_python_parity() {
 		fi
 	fi
 
-	# Strategy 2: Find pin with priority-can-change and parent-device prio
-	if [ -z "$pin_id" ]; then
-		dpll_load_pins
-		for id in "${!DPLL_PIN_CACHE[@]}"; do
-			local has_prio_cap=$(echo "${DPLL_PIN_CACHE[$id]}" | jq -r '.capabilities | contains(["priority-can-change"])' 2>> "$ERROR_LOG")
-			local parent_id=$(echo "${DPLL_PIN_CACHE[$id]}" | jq -r '.["parent-device"][0]."parent-id" // empty' 2>> "$ERROR_LOG")
-			local parent_prio=$(echo "${DPLL_PIN_CACHE[$id]}" | jq -r '.["parent-device"][0].prio // empty' 2>> "$ERROR_LOG")
-
-			if [ "$has_prio_cap" = "true" ] && [ -n "$parent_id" ] && [ -n "$parent_prio" ]; then
-				pin_id="$id"
-				test_attr="parent-device prio"
-				freq="$parent_prio"
-				alt_freq=$((parent_prio + 5))
-				break
-			fi
-		done
-	fi
+	# Strategy 2: parent-device prio is NOT used because it doesn't trigger notifications
+	# See kernel code - parent-device prio changes don't generate monitor events
 
 	if [ -z "$pin_id" ]; then
-		print_result SKIP "Monitor parity test (no pin with changeable attribute found)"
+		print_result SKIP "Monitor parity test (no pin with frequency-can-change + 2+ frequencies)"
 		echo ""
 		return
 	fi
@@ -2900,25 +2885,12 @@ test_monitor_python_parity() {
 		return
 	fi
 
-	# Perform a change based on what attribute we found
-	if [ "$test_attr" = "frequency" ]; then
-		echo -e "  ${DIM}Changing frequency: $freq -> $alt_freq -> $freq${NC}"
-		./dpll pin set id "$pin_id" frequency "$alt_freq" 2>/dev/null || true
-		sleep 2
-		./dpll pin set id "$pin_id" frequency "$freq" 2>/dev/null || true
-		sleep 2
-	elif [ "$test_attr" = "parent-device prio" ]; then
-		# Extract parent_id from earlier search
-		local parent_id=$(jq -r ".pin[] | select(.id == $pin_id) | .\"parent-device\"[0].\"parent-id\"" "$all_pins_json" 2>/dev/null)
-		echo -e "  ${DIM}WARNING: parent-device prio changes may not trigger notifications!${NC}"
-		echo -e "  ${DIM}Changing parent-device $parent_id prio: $freq -> $alt_freq -> $freq${NC}"
-		./dpll pin set id "$pin_id" parent-device "$parent_id" prio "$alt_freq" 2>/dev/null || true
-		sleep 2
-		./dpll pin set id "$pin_id" parent-device "$parent_id" prio "$freq" 2>/dev/null || true
-		sleep 2
-	else
-		echo -e "  ${DIM}ERROR: Unknown test_attr: $test_attr${NC}"
-	fi
+	# Perform frequency change (only supported test attribute)
+	echo -e "  ${DIM}Changing frequency: $freq -> $alt_freq -> $freq${NC}"
+	./dpll pin set id "$pin_id" frequency "$alt_freq" 2>/dev/null || true
+	sleep 2
+	./dpll pin set id "$pin_id" frequency "$freq" 2>/dev/null || true
+	sleep 2
 
 	# Stop both monitors
 	kill $c_pid $py_pid 2>/dev/null || true
