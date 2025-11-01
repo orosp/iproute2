@@ -482,7 +482,7 @@ int main(int argc, char **argv)
 		err = dpll_init(dpll);
 		if (err) {
 			ret = EXIT_FAILURE;
-			goto dpll_free;
+			goto json_cleanup;
 		}
 	}
 
@@ -497,6 +497,7 @@ int main(int argc, char **argv)
 dpll_fini:
 	if (need_nl)
 		dpll_fini(dpll);
+json_cleanup:
 	if (dpll->json_output)
 		close_json_object();
 	delete_json_obj_plain();

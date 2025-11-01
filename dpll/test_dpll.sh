@@ -213,14 +213,19 @@ dpll_load_devices() {
 		return 1
 	fi
 
+	# DEBUG: Save raw dpll output for inspection
+	cp "$json_file" "$TEST_DIR/dpll_device_show_raw_debug.json"
+
 	local device_count=$(jq -r '.device | length' "$json_file" 2>> "$ERROR_LOG" || echo 0)
 	if [ "$device_count" -eq 0 ]; then
+		echo "WARNING: device_count=0 from $json_file" >> "$ERROR_LOG"
 		return 1
 	fi
 
 	for ((i=0; i<device_count; i++)); do
 		local device_json=$(jq -c ".device[$i]" "$json_file" 2>> "$ERROR_LOG")
 		local device_id=$(echo "$device_json" | jq -r '.id' 2>> "$ERROR_LOG")
+		echo "DEBUG: Loading device $device_id: ${device_json:0:100}..." >> "$ERROR_LOG"
 		DPLL_DEVICE_CACHE[$device_id]="$device_json"
 	done
 
