@@ -514,6 +514,63 @@ dpll_get_parent_device_attr() {
 	return 0
 }
 
+# Get array length from pin cache
+# Usage: dpll_get_pin_array_length PIN_ID ARRAY_NAME
+# Example: dpll_get_pin_array_length 5 "frequency-supported"
+# Returns: array length or 0 if not found
+dpll_get_pin_array_length() {
+	local pin_id="$1"
+	local array_name="$2"
+
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		echo "0"
+		return 0
+	fi
+
+	local length=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"$array_name\" | length // 0" 2>> "$ERROR_LOG")
+	echo "${length:-0}"
+	return 0
+}
+
+# Get array length from device cache
+# Usage: dpll_get_device_array_length DEVICE_ID ARRAY_NAME
+# Returns: array length or 0 if not found
+dpll_get_device_array_length() {
+	local device_id="$1"
+	local array_name="$2"
+
+	dpll_load_devices || return 1
+
+	if [ -z "${DPLL_DEVICE_CACHE[$device_id]}" ]; then
+		echo "0"
+		return 0
+	fi
+
+	local length=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r ".\"$array_name\" | length // 0" 2>> "$ERROR_LOG")
+	echo "${length:-0}"
+	return 0
+}
+
+# Check if pin has specific capability
+# Usage: dpll_pin_has_capability PIN_ID CAPABILITY
+# Example: dpll_pin_has_capability 5 "state-can-change"
+# Returns: 0 if has capability, 1 if not
+dpll_pin_has_capability() {
+	local pin_id="$1"
+	local capability="$2"
+
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		return 1
+	fi
+
+	local has_cap=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".capabilities | contains([\"$capability\"])" 2>> "$ERROR_LOG")
+	[ "$has_cap" = "true" ]
+}
+
 # Provede SET operaci na device
 # Usage: dpll_device_set DEVICE_ID ATTR VALUE [ATTR2 VALUE2 ...]
 dpll_device_set() {
@@ -620,7 +677,7 @@ dpll_test_pin_freq_change() {
 			continue
 		fi
 
-		local supported_count=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.["frequency-supported"] | length' 2>> "$ERROR_LOG")
+		local supported_count=$(dpll_get_pin_array_length "$pid" "frequency-supported")
 		if [ "$supported_count" -ge 2 ]; then
 			pin_id="$pid"
 			break
@@ -2095,7 +2152,7 @@ test_phase_offset_monitoring() {
 		dpll_load_pins
 
 		# Check if any parent-device has phase-offset
-		local parent_count=$(echo "${DPLL_PIN_CACHE[$pin_with_phase]}" | jq -r '.["parent-device"] | length' 2>> "$ERROR_LOG")
+		local parent_count=$(dpll_get_pin_array_length "$pin_with_phase" "parent-device")
 		local found_phase_offset=0
 
 		for ((i=0; i<parent_count; i++)); do
