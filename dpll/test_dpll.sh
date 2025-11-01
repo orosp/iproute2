@@ -3306,11 +3306,6 @@ test_multi_enum_arrays() {
 				print_result SKIP "$test_name (Python CLI missing attribute)"
 			elif [ "$modes_dpll" = "$modes_python" ]; then
 				print_result PASS "$test_name (count=$mode_supported_count, match)"
-			elif [ -z "$modes_dpll" ] && [ -n "$modes_python" ]; then
-				# dpll returned empty array but Python returned values
-				# This can happen if kernel sent attributes but dpll tool didn't parse them,
-				# or if Python CLI adds default values
-				print_result SKIP "$test_name (dpll=[], python=[$modes_python] - possible parsing difference)"
 			else
 				print_result FAIL "$test_name (mismatch: dpll=[$modes_dpll], python=[$modes_python])"
 				echo "  Python output: $python_output"
@@ -3341,9 +3336,6 @@ test_multi_enum_arrays() {
 				print_result SKIP "$test_name (Python CLI missing attribute)"
 			elif [ "$cql_dpll" = "$cql_python" ]; then
 				print_result PASS "$test_name (count=$cql_count, match)"
-			elif [ -z "$cql_dpll" ] && [ -n "$cql_python" ]; then
-				# dpll returned empty array but Python returned values
-				print_result SKIP "$test_name (dpll=[], python=[$cql_python] - possible parsing difference)"
 			else
 				print_result FAIL "$test_name (mismatch: dpll=[$cql_dpll], python=[$cql_python])"
 				echo "  Python output: $python_output"
