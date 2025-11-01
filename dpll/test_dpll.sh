@@ -121,15 +121,20 @@ mkdir -p "$TEST_DIR"
 
 # Store initial dmesg state (count of lines, not content)
 DMESG_BASELINE_COUNT="$TEST_DIR/dmesg_baseline_count.txt"
-dmesg 2>> "$ERROR_LOG" | wc -l > "$DMESG_BASELINE_COUNT" || echo "0" > "$DMESG_BASELINE_COUNT"
+dmesg 2>/dev/null | wc -l > "$DMESG_BASELINE_COUNT" || echo "0" > "$DMESG_BASELINE_COUNT"
 
 # Cleanup on exit
 cleanup() {
+	# Show error log info only if it exists and has content
 	if [ -f "$ERROR_LOG" ] && [ -s "$ERROR_LOG" ]; then
 		echo ""
 		echo -e "${YELLOW}Error log saved to: $ERROR_LOG${NC}"
 		echo -e "${DIM}(contains all stderr output from commands)${NC}"
+	elif [ -f "$ERROR_LOG" ]; then
+		# Error log exists but is empty - no errors occurred
+		rm -f "$ERROR_LOG"
 	fi
+
 	# Don't remove TEST_DIR automatically if there were errors
 	if [ $FAILED_TESTS -eq 0 ] && [ $DMESG_ERRORS -eq 0 ]; then
 		rm -rf "$TEST_DIR"
