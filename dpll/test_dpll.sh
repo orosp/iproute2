@@ -195,7 +195,6 @@ DPLL_CACHE_VALID=0
 
 # Invaliduje cache (voláno po SET operacích)
 dpll_invalidate_cache() {
-	echo "DEBUG: dpll_invalidate_cache() called from: ${FUNCNAME[1]}" >> "$ERROR_LOG"
 	DPLL_DEVICE_CACHE=()
 	DPLL_PIN_CACHE=()
 	DPLL_CACHE_VALID=0
@@ -214,19 +213,14 @@ dpll_load_devices() {
 		return 1
 	fi
 
-	# DEBUG: Save raw dpll output for inspection
-	cp "$json_file" "$TEST_DIR/dpll_device_show_raw_debug.json"
-
 	local device_count=$(jq -r '.device | length' "$json_file" 2>> "$ERROR_LOG" || echo 0)
 	if [ "$device_count" -eq 0 ]; then
-		echo "WARNING: device_count=0 from $json_file" >> "$ERROR_LOG"
 		return 1
 	fi
 
 	for ((i=0; i<device_count; i++)); do
 		local device_json=$(jq -c ".device[$i]" "$json_file" 2>> "$ERROR_LOG")
 		local device_id=$(echo "$device_json" | jq -r '.id' 2>> "$ERROR_LOG")
-		echo "DEBUG: Loading device $device_id: ${device_json:0:100}..." >> "$ERROR_LOG"
 		DPLL_DEVICE_CACHE[$device_id]="$device_json"
 	done
 
@@ -2206,6 +2200,7 @@ test_pin_priority_capability() {
 	fi
 
 	# Find pin with priority-can-change capability and parent-device
+	dpll_load_pins || return
 	local pin_id=$(dpll_find_pin --with-capability "priority-can-change" --with-attr "parent-device")
 
 	if [ -z "$pin_id" ]; then
@@ -3299,20 +3294,6 @@ test_multi_enum_arrays() {
 
 	if [ -n "$device_id" ]; then
 		local test_name="Device $device_id: mode-supported array comparison"
-
-		# Debug: show what dpll cache contains
-		local cache_file="$TEST_DIR/dpll_device_${device_id}_cache_debug.json"
-		local cache_value="${DPLL_DEVICE_CACHE[$device_id]}"
-		echo "DEBUG mode-supported test: device_id=$device_id" >> "$ERROR_LOG"
-		echo "DEBUG cache_value length=${#cache_value}" >> "$ERROR_LOG"
-		echo "DEBUG cache_value=${cache_value:0:200}" >> "$ERROR_LOG"
-		echo "DEBUG cache keys: ${!DPLL_DEVICE_CACHE[@]}" >> "$ERROR_LOG"
-		echo "$cache_value" | jq '.' > "$cache_file" 2>&1
-
-		# Also get fresh output from dpll tool
-		local dpll_fresh="$TEST_DIR/dpll_device_${device_id}_fresh.json"
-		$DPLL_TOOL -j device show id $device_id > "$dpll_fresh" 2>&1
-
 		local mode_supported_count=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"] | length' 2>> "$ERROR_LOG")
 		local modes_dpll=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"] | sort | .[]' 2>> "$ERROR_LOG" | tr '\n' ' ')
 
@@ -3331,8 +3312,6 @@ test_multi_enum_arrays() {
 				print_result PASS "$test_name (count=$mode_supported_count, match)"
 			else
 				print_result FAIL "$test_name (mismatch: dpll=[$modes_dpll], python=[$modes_python])"
-				echo "  DPLL cache: $cache_file"
-				echo "  DPLL fresh: $dpll_fresh"
 				echo "  Python output: $python_output"
 			fi
 		fi
