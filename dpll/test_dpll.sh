@@ -96,14 +96,13 @@ TEST_DIR="/tmp/dpll_test_$$"
 ERROR_LOG="$TEST_DIR/all_errors.log"
 
 # Create wrapper script for dpll tool that:
-# 1. Captures all stderr to ERROR_LOG
-# 2. Adds sleep after execution for kernel dmesg flush
+# 1. Adds sleep after execution for kernel dmesg flush
+# Note: stderr is NOT redirected here - let test commands handle it
 DPLL_TOOL="$TEST_DIR/dpll_wrapper.sh"
 mkdir -p "$TEST_DIR"
 cat > "$DPLL_TOOL" <<WRAPPER_EOF
 #!/bin/bash
-ERROR_LOG_FILE="$ERROR_LOG"
-./dpll "\$@" 2>> "\$ERROR_LOG_FILE"
+./dpll "\$@"
 exit_code=\$?
 sleep 1
 exit \$exit_code
@@ -702,7 +701,7 @@ dpll_has_error() {
 	fi
 
 	# Check for error message
-	if grep -q "Failed to get\|Failed to dump" "$output_file" 2>/dev/null; then
+	if grep -qE "Failed to get|Failed to dump|multiple matches" "$output_file" 2>/dev/null; then
 		return 0
 	fi
 
@@ -1134,7 +1133,7 @@ test_device_id_get() {
 			local dpll_result_basic="$TEST_DIR/dpll_device_id_get_module_basic.txt"
 			$DPLL_TOOL device id-get module-name "$module_name" > "$dpll_result_basic" 2>&1 || true
 			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
-			local has_error=$(grep -qE "Failed to get|No device found" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+			local has_error=$(grep -qE "Failed to get|No device found|multiple matches" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
 
 			if [ "$has_error" = "yes" ]; then
 				# Error is expected if there are multiple devices with same module-name
@@ -1191,7 +1190,7 @@ test_device_id_get() {
 			local dpll_result_basic="$TEST_DIR/dpll_device_id_get_clock_basic.txt"
 			$DPLL_TOOL device id-get module-name "$module_name" clock-id "$clock_id" > "$dpll_result_basic" 2>&1 || true
 			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
-			local has_error=$(grep -qE "Failed to get|No device found" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+			local has_error=$(grep -qE "Failed to get|No device found|multiple matches" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
 
 			if [ "$has_error" = "yes" ]; then
 				# Error is expected if there are multiple devices
@@ -1416,7 +1415,7 @@ test_pin_id_get() {
 			local dpll_result_basic="$TEST_DIR/dpll_pin_id_get_module_basic.txt"
 			$DPLL_TOOL pin id-get module-name "$module_name" > "$dpll_result_basic" 2>&1 || true
 			local found_id=$(cat "$dpll_result_basic" | tr -d '\n')
-			local has_error=$(grep -qE "Failed to get|No pin found" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
+			local has_error=$(grep -qE "Failed to get|No pin found|multiple matches" "$dpll_result_basic" 2>/dev/null && echo "yes" || echo "no")
 
 			if [ "$has_error" = "yes" ]; then
 				# Error is expected if there are multiple pins with same module-name
