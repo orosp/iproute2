@@ -195,6 +195,7 @@ DPLL_CACHE_VALID=0
 
 # Invaliduje cache (voláno po SET operacích)
 dpll_invalidate_cache() {
+	echo "DEBUG: dpll_invalidate_cache() called from: ${FUNCNAME[1]}" >> "$ERROR_LOG"
 	DPLL_DEVICE_CACHE=()
 	DPLL_PIN_CACHE=()
 	DPLL_CACHE_VALID=0
