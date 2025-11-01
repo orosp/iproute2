@@ -2512,22 +2512,42 @@ test_parent_operations() {
 	# Test pin set with parent-device
 	if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
 		local device_id=$(dpll_find_device)
-		local pin_id=$(dpll_find_pin)
 
-		if [ -n "$device_id" ] && [ -n "$pin_id" ]; then
-			# Test parent-device with state
-			dpll_test_parent_device_set "$pin_id" "$device_id" state connected
+		# Find pin with state-can-change capability for parent-device state SET
+		dpll_load_pins || return
+		local pin_state=$(dpll_find_pin --with-capability "state-can-change" --with-attr "parent-device")
 
-			# Test parent-device with prio
-			dpll_test_parent_device_set "$pin_id" "$device_id" prio 5
-
-			# Test parent-device with direction
-			dpll_test_parent_device_set "$pin_id" "$device_id" direction input
-
-			# Test parent-device with multiple attributes
-			dpll_test_parent_device_set "$pin_id" "$device_id" state connected prio 10 direction input
+		if [ -n "$device_id" ] && [ -n "$pin_state" ]; then
+			dpll_test_parent_device_set "$pin_state" "$device_id" state connected
 		else
-			print_result SKIP "Pin set with parent-device (missing device or pin)"
+			print_result SKIP "Pin parent-device state SET (no pin with state-can-change capability)"
+		fi
+
+		# Find pin with priority-can-change capability for parent-device prio SET
+		local pin_prio=$(dpll_find_pin --with-capability "priority-can-change" --with-attr "parent-device")
+
+		if [ -n "$device_id" ] && [ -n "$pin_prio" ]; then
+			dpll_test_parent_device_set "$pin_prio" "$device_id" prio 5
+		else
+			print_result SKIP "Pin parent-device prio SET (no pin with priority-can-change capability)"
+		fi
+
+		# Find pin with direction-can-change capability for parent-device direction SET
+		local pin_dir=$(dpll_find_pin --with-capability "direction-can-change" --with-attr "parent-device")
+
+		if [ -n "$device_id" ] && [ -n "$pin_dir" ]; then
+			dpll_test_parent_device_set "$pin_dir" "$device_id" direction input
+		else
+			print_result SKIP "Pin parent-device direction SET (no pin with direction-can-change capability)"
+		fi
+
+		# Find pin with all three capabilities for combined SET test
+		local pin_all=$(dpll_find_pin --with-capability "state-can-change" --with-capability "priority-can-change" --with-capability "direction-can-change" --with-attr "parent-device")
+
+		if [ -n "$device_id" ] && [ -n "$pin_all" ]; then
+			dpll_test_parent_device_set "$pin_all" "$device_id" state connected prio 10 direction input
+		else
+			print_result SKIP "Pin parent-device combined SET (no pin with all three capabilities)"
 		fi
 	else
 		print_result SKIP "Pin set with parent-device (read-only mode, use --enable-set)"
