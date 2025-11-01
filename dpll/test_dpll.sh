@@ -2874,7 +2874,8 @@ test_monitor_python_parity() {
 	local c_pid=$!
 
 	# Start Python monitor (use python3 -u for unbuffered output!)
-	timeout 15 python3 -u "$PYTHON_CLI" --spec "$DPLL_SPEC" --subscribe monitor > "$py_monitor_out" 2>&1 &
+	# Use PYTHON_CLI_ORIG since we're already calling python3
+	timeout 15 python3 -u "$PYTHON_CLI_ORIG" --spec "$DPLL_SPEC" --subscribe monitor > "$py_monitor_out" 2>&1 &
 	local py_pid=$!
 
 	sleep 3  # Give both monitors time to start and subscribe
@@ -2888,7 +2889,12 @@ test_monitor_python_parity() {
 	fi
 
 	if ! kill -0 $py_pid 2>/dev/null; then
-		print_result SKIP "Monitor parity test (Python monitor failed to start)"
+		# Check if Python CLI wrapper issue
+		if grep -q "SyntaxError" "$py_monitor_out" 2>/dev/null; then
+			print_result SKIP "Monitor parity test (Python monitor syntax error - check wrapper)"
+		else
+			print_result SKIP "Monitor parity test (Python monitor failed to start)"
+		fi
 		kill $c_pid 2>/dev/null || true
 		echo ""
 		return
