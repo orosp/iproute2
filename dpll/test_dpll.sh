@@ -681,6 +681,17 @@ dpll_assert_not_empty() {
 	fi
 }
 
+# Normalize JSON for comparison
+# Usage: dpll_normalize_json "json_string" ["selector"]
+# Example: dpll_normalize_json "$json" ".pin[0]"
+# Returns: Sorted, normalized JSON suitable for comparison
+dpll_normalize_json() {
+	local json="$1"
+	local selector="${2:-.}"
+
+	echo "$json" | jq -S "$selector | walk(if type == \"array\" then sort else . end)" 2>/dev/null
+}
+
 # Deklarativní test case pro pin frequency change
 # Usage: dpll_test_pin_freq_change
 dpll_test_pin_freq_change() {
@@ -3555,8 +3566,8 @@ test_pin_complete_comparison() {
 		echo "  Python output: $python_output"
 	else
 		# Normalize and compare: dpll tool wraps in {pin:[{...}]}, Python CLI returns {...} directly
-		local dpll_normalized=$(jq -S '.pin[0] // . | walk(if type == "array" then sort else . end)' "$dpll_output" 2>/dev/null)
-		local python_normalized=$(jq -S 'walk(if type == "array" then sort else . end)' "$python_output" 2>/dev/null)
+		local dpll_normalized=$(dpll_normalize_json "$(cat "$dpll_output")" ".pin[0] // .")
+		local python_normalized=$(dpll_normalize_json "$(cat "$python_output")")
 
 		if [ -z "$dpll_normalized" ] || [ -z "$python_normalized" ]; then
 			print_result FAIL "$test_name (invalid JSON)"
@@ -3622,8 +3633,8 @@ test_device_complete_comparison() {
 		echo "  Python output: $python_output"
 	else
 		# Normalize and compare: dpll tool wraps in {device:[{...}]}, Python CLI returns {...} directly
-		local dpll_normalized=$(jq -S '.device[0] // . | walk(if type == "array" then sort else . end)' "$dpll_output" 2>/dev/null)
-		local python_normalized=$(jq -S 'walk(if type == "array" then sort else . end)' "$python_output" 2>/dev/null)
+		local dpll_normalized=$(dpll_normalize_json "$(cat "$dpll_output")" ".device[0] // .")
+		local python_normalized=$(dpll_normalize_json "$(cat "$python_output")")
 
 		if [ -z "$dpll_normalized" ] || [ -z "$python_normalized" ]; then
 			print_result FAIL "$test_name (invalid JSON)"
