@@ -1780,50 +1780,30 @@ test_device_set() {
 	echo ""
 }
 
-# Test device mode operations
+# Test device mode read operations
+# NOTE: Mode SET is not tested because:
+# 1. Kernel doesn't support mode changing (see dpll_netlink.c:134)
+# 2. dpll tool doesn't parse "mode" argument in device set
+# 3. mode-supported array is already tested in test_multi_enum_arrays()
 test_device_mode_operations() {
-	print_header "Testing Device Mode Operations"
+	print_header "Testing Device Mode Read Operations"
 
-	# Find device with mode-supported attribute
-	local device_id=$(dpll_find_device --with-attr "mode-supported")
+	# Find device with mode attribute
+	local device_id=$(dpll_find_device --with-attr "mode")
 
 	if [ -z "$device_id" ]; then
-		print_result SKIP "Device mode operations (no device with mode-supported)"
+		print_result SKIP "Device mode operations (no device with mode)"
 		echo ""
 		return
 	fi
 
-	# Test 1: Read current mode
-	if dpll_device_has_attr "$device_id" "mode"; then
-		local current_mode=$(dpll_get_device_attr "$device_id" "mode")
+	# Test: Read current mode
+	local current_mode=$(dpll_get_device_attr "$device_id" "mode")
+	if [ -n "$current_mode" ]; then
 		print_result PASS "Device $device_id has mode: $current_mode"
 	else
-		print_result SKIP "Device $device_id mode (attribute not present)"
-		echo ""
-		return
+		print_result FAIL "Device $device_id mode (attribute empty)"
 	fi
-
-	# Test 2: Read mode-supported
-	local modes_supported=$(dpll_get_device_attr "$device_id" "mode-supported")
-	if [ -n "$modes_supported" ]; then
-		local mode_count=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"] | length' 2>> "$ERROR_LOG")
-		print_result PASS "Device $device_id has $mode_count supported modes"
-	else
-		print_result FAIL "Device $device_id mode-supported (empty)"
-	fi
-
-	# Test 3: SET mode operations (if enabled)
-	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
-		print_result SKIP "Device mode SET operations (read-only mode, use --enable-set)"
-		echo ""
-		return
-	fi
-
-	# Mode setting is not supported by kernel yet (see dpll_netlink.c:134)
-	# "No mode change is supported now, so the only supported mode is the
-	#  one obtained by mode_get()."
-	# Additionally, dpll tool doesn't parse "mode" argument in device set.
-	print_result SKIP "Device mode SET operations (not supported by kernel/tool yet)"
 
 	echo ""
 }
