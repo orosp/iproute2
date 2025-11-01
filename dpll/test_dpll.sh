@@ -2586,7 +2586,8 @@ test_reference_sync() {
 		print_result PASS "Reference-sync attribute found (pin $pin_with_ref_sync)"
 
 		# Count reference-sync entries
-		local ref_count=$(echo "${DPLL_PIN_CACHE[$pin_with_ref_sync]}" | jq -r '.["reference-sync"] | length' 2>> "$ERROR_LOG")
+		local ref_count=$(echo "${DPLL_PIN_CACHE[$pin_with_ref_sync]}" | jq -r '.["reference-sync"] | length // 0' 2>> "$ERROR_LOG")
+		ref_count=${ref_count:-0}
 		if [ "$ref_count" -gt 0 ]; then
 			print_result PASS "Reference-sync array parsing ($ref_count entries)"
 		fi
@@ -2598,12 +2599,16 @@ test_reference_sync() {
 	if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
 		dpll_load_pins
 
-		# Get two different pin IDs
-		local pin_ids=(${!DPLL_PIN_CACHE[@]})
-		if [ ${#pin_ids[@]} -ge 2 ]; then
-			local pin_id="${pin_ids[0]}"
-			local ref_pin_id="${pin_ids[1]}"
+		# Find a pin with reference-sync attribute and get valid reference pin ID from it
+		local pin_id=$(dpll_find_pin --with-attr "reference-sync")
+		local ref_pin_id=""
 
+		if [ -n "$pin_id" ]; then
+			# Extract first reference-sync pin ID from the array
+			ref_pin_id=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["reference-sync"][0].id // empty' 2>> "$ERROR_LOG")
+		fi
+
+		if [ -n "$pin_id" ] && [ -n "$ref_pin_id" ]; then
 			local test_name="Pin $pin_id reference-sync $ref_pin_id set: state connected"
 
 			if dpll_pin_set "$pin_id" reference-sync "$ref_pin_id" state connected; then
@@ -2617,7 +2622,7 @@ test_reference_sync() {
 				fi
 			fi
 		else
-			print_result SKIP "Pin set with reference-sync (not enough pins)"
+			print_result SKIP "Pin set with reference-sync (no pin with reference-sync attribute)"
 		fi
 	else
 		print_result SKIP "Pin set with reference-sync (read-only mode, use --enable-set)"
