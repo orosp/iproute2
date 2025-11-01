@@ -2079,18 +2079,13 @@ test_pin_state_operations() {
 		return
 	fi
 
-	# Find pin with state-can-change capability
-	local pin_id=$(dpll_find_pin --with-capability "state-can-change")
+	# Find pin with top-level state attribute
+	# Note: state-can-change capability refers to parent-device/parent-pin state,
+	# not top-level pin state. We need to find a pin that actually has a state attribute.
+	local pin_id=$(dpll_find_pin --with-attr "state")
 
 	if [ -z "$pin_id" ]; then
-		print_result SKIP "Pin state operations (no pin with state-can-change capability)"
-		echo ""
-		return
-	fi
-
-	# Test 1: Read current state
-	if ! dpll_pin_has_attr "$pin_id" "state"; then
-		print_result SKIP "Pin $pin_id state (attribute not present)"
+		print_result SKIP "Pin state operations (no pin with state attribute)"
 		echo ""
 		return
 	fi
