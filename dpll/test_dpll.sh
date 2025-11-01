@@ -2069,73 +2069,16 @@ test_phase_offset_monitoring() {
 	echo ""
 }
 
-# Test pin state operations
-test_pin_state_operations() {
-	print_header "Testing Pin State Operations"
-
-	if [ $ENABLE_SET_OPERATIONS -eq 0 ]; then
-		print_result SKIP "Pin state operations (read-only mode, use --enable-set)"
-		echo ""
-		return
-	fi
-
-	# Find pin with top-level state attribute
-	# Note: state-can-change capability refers to parent-device/parent-pin state,
-	# not top-level pin state. We need to find a pin that actually has a state attribute.
-	local pin_id=$(dpll_find_pin --with-attr "state")
-
-	if [ -z "$pin_id" ]; then
-		print_result SKIP "Pin state operations (no pin with state attribute)"
-		echo ""
-		return
-	fi
-
-	local original_state=$(dpll_get_pin_attr "$pin_id" "state")
-	print_result PASS "Pin $pin_id current state: $original_state"
-
-	# Test 2: Try to set state to connected
-	if dpll_pin_set_and_verify "$pin_id" "state" "connected"; then
-		print_result PASS "Pin $pin_id set state to connected"
-	else
-		print_result FAIL "Pin $pin_id failed to set state to connected"
-	fi
-
-	# Test 3: Try to set state to disconnected
-	if dpll_pin_set_and_verify "$pin_id" "state" "disconnected"; then
-		print_result PASS "Pin $pin_id set state to disconnected"
-	else
-		print_result FAIL "Pin $pin_id failed to set state to disconnected"
-	fi
-
-	# Test 4: Try to set state to selectable
-	if dpll_pin_set_and_verify "$pin_id" "state" "selectable"; then
-		print_result PASS "Pin $pin_id set state to selectable"
-	else
-		# selectable might not be supported, that's OK
-		print_result SKIP "Pin $pin_id state selectable (not supported)"
-	fi
-
-	# Restore original state
-	if [ -n "$original_state" ]; then
-		dpll_pin_set "$pin_id" "state" "$original_state" >> "$ERROR_LOG" 2>&1
-		print_result PASS "Pin $pin_id restored to original state: $original_state"
-	fi
-
-	# Test 5: Test parent-device state (if available)
-	if dpll_has_parent_device "$pin_id"; then
-		local device_id=$(dpll_find_device)
-		if [ -n "$device_id" ]; then
-			# Try to set parent-device state
-			if dpll_pin_set "$pin_id" parent-device "$device_id" state connected; then
-				print_result PASS "Pin $pin_id parent-device $device_id state set"
-			else
-				print_result SKIP "Pin $pin_id parent-device state (not supported)"
-			fi
-		fi
-	fi
-
-	echo ""
-}
+# NOTE: Top-level pin "state" attribute does not exist in DPLL netlink API.
+# State is only valid in the context of parent-device or parent-pin relationships.
+# See dpll_pin_set_from_nlattr() in kernel's dpll_netlink.c - it only handles:
+# - DPLL_A_PIN_PARENT_DEVICE (which can contain state)
+# - DPLL_A_PIN_PARENT_PIN (which can contain state)
+# But no top-level DPLL_A_PIN_STATE case exists.
+#
+# Parent-device and parent-pin state is tested in:
+# - test_pin_parent_device_attributes() (validates parent-device state values)
+# - test_pin_capabilities_validation() (tests state-can-change capability)
 
 # Test pin frequency change (refactored to use DPLL API)
 test_pin_frequency_change() {
@@ -3758,7 +3701,7 @@ main() {
 	test_phase_offset_monitoring
 	test_pin_operations
 	test_pin_id_get
-	test_pin_state_operations
+	# test_pin_state_operations - REMOVED: top-level pin state doesn't exist in kernel
 	test_pin_type_validation
 	test_pin_frequency_change
 	test_pin_priority_capability
