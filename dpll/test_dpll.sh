@@ -94,18 +94,49 @@ PYTHON_CLI="/root/net-next/tools/net/ynl/pyynl/cli.py"
 DPLL_SPEC="/root/net-next/Documentation/netlink/specs/dpll.yaml"
 TEST_DIR="/tmp/dpll_test_$$"
 ERROR_LOG="$TEST_DIR/all_errors.log"
+COMMAND_LOG="$TEST_DIR/commands.log"
 
 # Create wrapper script for dpll tool that:
-# 1. Adds sleep after execution for kernel dmesg flush
-# Note: stderr is NOT redirected here - let test commands handle it
+# 1. Logs command with timestamp and arguments
+# 2. Adds sleep after execution for kernel dmesg flush
+# 3. Logs exit code
 DPLL_TOOL="$TEST_DIR/dpll_wrapper.sh"
 mkdir -p "$TEST_DIR"
-cat > "$DPLL_TOOL" <<WRAPPER_EOF
+cat > "$DPLL_TOOL" <<'WRAPPER_EOF'
 #!/bin/bash
-./dpll "\$@"
-exit_code=\$?
+COMMAND_LOG="$(dirname "$0")/commands.log"
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S.%3N')
+
+# Log command with timestamp
+echo "[$TIMESTAMP] dpll $@" >> "$COMMAND_LOG"
+
+# Capture output to temp file for preview
+TEMP_OUT=$(mktemp)
+./dpll "$@" > "$TEMP_OUT" 2>&1
+exit_code=$?
+
+# Log exit code and output preview (first 3 lines)
+if [ $exit_code -eq 0 ]; then
+	echo "  → exit: $exit_code" >> "$COMMAND_LOG"
+else
+	echo "  → exit: $exit_code (FAILED)" >> "$COMMAND_LOG"
+fi
+
+# Add output preview if not empty
+if [ -s "$TEMP_OUT" ]; then
+	head -3 "$TEMP_OUT" | sed 's/^/  | /' >> "$COMMAND_LOG"
+	line_count=$(wc -l < "$TEMP_OUT")
+	if [ "$line_count" -gt 3 ]; then
+		echo "  | ... ($((line_count - 3)) more lines)" >> "$COMMAND_LOG"
+	fi
+fi
+
+# Output to stdout/stderr for test to consume
+cat "$TEMP_OUT"
+rm -f "$TEMP_OUT"
+
 sleep 1
-exit \$exit_code
+exit $exit_code
 WRAPPER_EOF
 chmod +x "$DPLL_TOOL"
 
@@ -125,10 +156,18 @@ dmesg 2>/dev/null | wc -l > "$DMESG_BASELINE_COUNT" || echo "0" > "$DMESG_BASELI
 
 # Cleanup on exit
 cleanup() {
+	echo ""
+
+	# Show command log info (always available)
+	if [ -f "$COMMAND_LOG" ] && [ -s "$COMMAND_LOG" ]; then
+		local cmd_count=$(grep -c '^\[' "$COMMAND_LOG" 2>/dev/null || echo 0)
+		echo -e "${CYAN}Command log: $COMMAND_LOG${NC}"
+		echo -e "${DIM}(tracked $cmd_count commands with timestamps and exit codes)${NC}"
+	fi
+
 	# Show error log info only if it exists and has content
 	if [ -f "$ERROR_LOG" ] && [ -s "$ERROR_LOG" ]; then
-		echo ""
-		echo -e "${YELLOW}Error log saved to: $ERROR_LOG${NC}"
+		echo -e "${YELLOW}Error log: $ERROR_LOG${NC}"
 		echo -e "${DIM}(contains all stderr output from commands)${NC}"
 	elif [ -f "$ERROR_LOG" ]; then
 		# Error log exists but is empty - no errors occurred
@@ -139,7 +178,7 @@ cleanup() {
 	if [ $FAILED_TESTS -eq 0 ] && [ $DMESG_ERRORS -eq 0 ]; then
 		rm -rf "$TEST_DIR"
 	else
-		echo -e "${YELLOW}Test artifacts saved in: $TEST_DIR${NC}"
+		echo -e "${YELLOW}Test artifacts: $TEST_DIR${NC}"
 	fi
 }
 trap cleanup EXIT
@@ -928,13 +967,50 @@ check_prerequisites() {
 		echo "Some tests will be skipped"
 		PYTHON_CLI=""
 	else
-		# Create Python CLI wrapper that captures stderr
+		# Create Python CLI wrapper with command logging
 		PYTHON_CLI_ORIG="$PYTHON_CLI"
 		PYTHON_CLI="$TEST_DIR/python_cli_wrapper.sh"
-		cat > "$PYTHON_CLI" <<PYWRAPPER_EOF
+		cat > "$PYTHON_CLI" <<'PYWRAPPER_EOF'
 #!/bin/bash
-ERROR_LOG_FILE="$ERROR_LOG"
-python3 "$PYTHON_CLI_ORIG" "\$@" 2>> "\$ERROR_LOG_FILE"
+COMMAND_LOG="$(dirname "$0")/commands.log"
+ERROR_LOG_FILE="$(dirname "$0")/all_errors.log"
+PYTHON_CLI_ORIG="/root/net-next/tools/net/ynl/pyynl/cli.py"
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S.%3N')
+
+# Log command with timestamp
+echo "[$TIMESTAMP] cli.py $@" >> "$COMMAND_LOG"
+
+# Capture output to temp file for preview
+TEMP_OUT=$(mktemp)
+python3 "$PYTHON_CLI_ORIG" "$@" > "$TEMP_OUT" 2>&1
+exit_code=$?
+
+# Also log stderr to error log
+if [ $exit_code -ne 0 ]; then
+	cat "$TEMP_OUT" 2>&1 | grep -E "Error|error|ERROR|failed|Failed|FAILED" >> "$ERROR_LOG_FILE" 2>/dev/null || true
+fi
+
+# Log exit code and output preview (first 3 lines)
+if [ $exit_code -eq 0 ]; then
+	echo "  → exit: $exit_code" >> "$COMMAND_LOG"
+else
+	echo "  → exit: $exit_code (FAILED)" >> "$COMMAND_LOG"
+fi
+
+# Add output preview if not empty
+if [ -s "$TEMP_OUT" ]; then
+	head -3 "$TEMP_OUT" | sed 's/^/  | /' >> "$COMMAND_LOG"
+	line_count=$(wc -l < "$TEMP_OUT")
+	if [ "$line_count" -gt 3 ]; then
+		echo "  | ... ($((line_count - 3)) more lines)" >> "$COMMAND_LOG"
+	fi
+fi
+
+# Output to stdout/stderr for test to consume
+cat "$TEMP_OUT"
+rm -f "$TEMP_OUT"
+
+exit $exit_code
 PYWRAPPER_EOF
 		chmod +x "$PYTHON_CLI"
 		export PYTHON_CLI_ORIG
