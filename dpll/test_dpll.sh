@@ -451,6 +451,25 @@ dpll_get_pin_attr() {
 	return 0
 }
 
+# Get parent-device attribute value for a specific pin and device
+# Usage: dpll_get_parent_device_attr PIN_ID DEVICE_ID ATTR_NAME
+# Returns: attribute value from parent-device array entry matching parent-id
+dpll_get_parent_device_attr() {
+	local pin_id="$1"
+	local device_id="$2"
+	local attr_name="$3"
+
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		return 1
+	fi
+
+	# Find parent-device entry with matching parent-id and extract attribute
+	echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"parent-device\"[]? | select(.\"parent-id\" == $device_id) | .\"$attr_name\" // empty" 2>> "$ERROR_LOG"
+	return 0
+}
+
 # Provede SET operaci na device
 # Usage: dpll_device_set DEVICE_ID ATTR VALUE [ATTR2 VALUE2 ...]
 dpll_device_set() {
