@@ -3292,6 +3292,9 @@ test_multi_enum_arrays() {
 	fi
 
 	# Test 1: mode-supported multi-enum array
+	# Load devices BEFORE calling dpll_find_device in subshell, otherwise cache
+	# changes made in subshell won't propagate to parent shell
+	dpll_load_devices || return
 	local device_id=$(dpll_find_device --with-attr "mode-supported")
 
 	if [ -n "$device_id" ]; then
@@ -3338,6 +3341,7 @@ test_multi_enum_arrays() {
 	fi
 
 	# Test 2: clock-quality-level multi-enum array
+	dpll_load_devices || return
 	device_id=$(dpll_find_device --with-attr "clock-quality-level")
 
 	if [ -n "$device_id" ]; then
