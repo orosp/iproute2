@@ -2674,34 +2674,40 @@ test_monitor_events() {
 	fi
 
 	# Find a pin suitable for testing - use frequency change (generates monitor events)
-	# Note: prio and direction are parent-device relationship attributes, not suitable
-	# for simple monitor event testing as they require parent context
+	# Note: We look for pins with frequency-supported array (multiple frequencies available)
+	# The frequency-can-change capability doesn't exist in practice - frequency changes
+	# work based on frequency-supported array presence
 	dpll_load_pins || return
-	local pin_id=$(dpll_find_pin --with-capability "frequency-can-change" --with-attr "frequency")
+
+	local pin_id=""
 	local test_attr=""
 	local orig_value=""
 	local new_value=""
 
-	if [ -n "$pin_id" ]; then
-		test_attr="frequency"
-		orig_value=$(dpll_get_pin_attr "$pin_id" "frequency")
-		local freq_count=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"] | length' 2>> "$ERROR_LOG" || echo 0)
+	# Iterate through all pins to find one with multiple supported frequencies
+	for pid in "${!DPLL_PIN_CACHE[@]}"; do
+		local freq_count=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.["frequency-supported"] | length // 0' 2>> "$ERROR_LOG")
 
 		if [ "$freq_count" -ge 2 ]; then
-			# Try to find alternative frequency
-			new_value=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
-			if [ -z "$new_value" ] || [ "$new_value" = "$orig_value" ]; then
-				# Try first frequency if second doesn't work
-				new_value=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][0]."frequency-min" // empty' 2>> "$ERROR_LOG")
+			orig_value=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.frequency // empty' 2>> "$ERROR_LOG")
+
+			if [ -n "$orig_value" ]; then
+				# Try to find alternative frequency
+				new_value=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
+				if [ -z "$new_value" ] || [ "$new_value" = "$orig_value" ]; then
+					# Try first frequency if second doesn't work
+					new_value=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.["frequency-supported"][0]."frequency-min" // empty' 2>> "$ERROR_LOG")
+				fi
+
+				if [ -n "$new_value" ] && [ "$new_value" != "$orig_value" ]; then
+					# Found suitable pin with alternative frequency
+					pin_id="$pid"
+					test_attr="frequency"
+					break
+				fi
 			fi
-			if [ -z "$new_value" ] || [ "$new_value" = "$orig_value" ]; then
-				# No alternative frequency
-				pin_id=""
-			fi
-		else
-			pin_id=""
 		fi
-	fi
+	done
 
 	if [ -z "$pin_id" ]; then
 		print_result SKIP "Monitor event detection (no suitable pin found with changeable attributes)"
@@ -2838,41 +2844,42 @@ test_monitor_python_parity() {
 	local alt_freq=""
 	local test_attr=""
 
-	# Strategy 1: Find pin with changeable frequency (2+ supported frequencies)
-	pin_id=$(dpll_find_pin --with-capability "frequency-can-change" --with-attr "frequency")
-	if [ -n "$pin_id" ]; then
-		local current_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
-		local freq_count=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"] | length' 2>> "$ERROR_LOG" || echo 0)
+	# Strategy: Find pin with changeable frequency (2+ supported frequencies)
+	# Note: frequency-can-change capability doesn't exist in practice - we look for
+	# pins with frequency-supported array instead
+	dpll_load_pins || return
+
+	for pid in "${!DPLL_PIN_CACHE[@]}"; do
+		local freq_count=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.["frequency-supported"] | length // 0' 2>> "$ERROR_LOG")
 
 		if [ "$freq_count" -ge 2 ]; then
-			local freq1=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][0]."frequency-min"' 2>> "$ERROR_LOG")
-			local freq2=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min"' 2>> "$ERROR_LOG")
+			local current_freq=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.frequency // empty' 2>> "$ERROR_LOG")
 
-			# Make sure we pick a frequency different from current
-			local selected_freq=""
-			if [ "$freq1" != "$current_freq" ]; then
-				selected_freq="$freq1"
-			elif [ "$freq2" != "$current_freq" ]; then
-				selected_freq="$freq2"
-			fi
+			if [ -n "$current_freq" ]; then
+				local freq1=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.["frequency-supported"][0]."frequency-min" // empty' 2>> "$ERROR_LOG")
+				local freq2=$(echo "${DPLL_PIN_CACHE[$pid]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
 
-			if [ -n "$selected_freq" ] && [ "$selected_freq" != "$current_freq" ]; then
-				freq="$current_freq"
-				alt_freq="$selected_freq"
-				test_attr="frequency"
-			else
-				pin_id=""
+				# Make sure we pick a frequency different from current
+				local selected_freq=""
+				if [ -n "$freq1" ] && [ "$freq1" != "$current_freq" ]; then
+					selected_freq="$freq1"
+				elif [ -n "$freq2" ] && [ "$freq2" != "$current_freq" ]; then
+					selected_freq="$freq2"
+				fi
+
+				if [ -n "$selected_freq" ]; then
+					pin_id="$pid"
+					freq="$current_freq"
+					alt_freq="$selected_freq"
+					test_attr="frequency"
+					break
+				fi
 			fi
-		else
-			pin_id=""
 		fi
-	fi
-
-	# Strategy 2: parent-device prio is NOT used because it doesn't trigger notifications
-	# See kernel code - parent-device prio changes don't generate monitor events
+	done
 
 	if [ -z "$pin_id" ]; then
-		print_result SKIP "Monitor parity test (no pin with frequency-can-change + 2+ frequencies)"
+		print_result SKIP "Monitor parity test (no pin with 2+ supported frequencies)"
 		echo ""
 		return
 	fi
