@@ -1819,20 +1819,11 @@ test_device_mode_operations() {
 		return
 	fi
 
-	# Try to set mode to each supported mode
-	local modes=$(echo "${DPLL_DEVICE_CACHE[$device_id]}" | jq -r '.["mode-supported"][]' 2>> "$ERROR_LOG")
-	for mode in $modes; do
-		if dpll_device_set_and_verify "$device_id" "mode" "$mode"; then
-			print_result PASS "Device $device_id set mode to $mode"
-		else
-			print_result FAIL "Device $device_id failed to set mode to $mode"
-		fi
-	done
-
-	# Restore original mode
-	if [ -n "$current_mode" ]; then
-		dpll_device_set "$device_id" "mode" "$current_mode" >> "$ERROR_LOG" 2>&1
-	fi
+	# Mode setting is not supported by kernel yet (see dpll_netlink.c:134)
+	# "No mode change is supported now, so the only supported mode is the
+	#  one obtained by mode_get()."
+	# Additionally, dpll tool doesn't parse "mode" argument in device set.
+	print_result SKIP "Device mode SET operations (not supported by kernel/tool yet)"
 
 	echo ""
 }
