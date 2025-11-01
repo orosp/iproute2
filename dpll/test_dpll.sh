@@ -2692,6 +2692,8 @@ test_monitor_events() {
 		return
 	fi
 
+	echo -e "  ${DIM}Monitor started (PID: $monitor_pid)${NC}"
+
 	local operations_performed=0
 	local test_name=""
 
@@ -2736,6 +2738,7 @@ test_monitor_events() {
 	# Test 1: Did we capture PIN_CHANGE events?
 	local pin_change_count=$(grep -c "\[PIN_CHANGE\]" "$monitor_output" 2>/dev/null | head -1)
 	pin_change_count=${pin_change_count:-0}
+	echo -e "  ${DIM}Monitor stopped, captured $pin_change_count events${NC}"
 	if [ "$pin_change_count" -gt 0 ]; then
 		print_result PASS "Monitor captured PIN_CHANGE events ($pin_change_count events)"
 	else
@@ -2873,6 +2876,8 @@ test_monitor_python_parity() {
 		return
 	fi
 
+	echo -e "  ${DIM}Both monitors started (C PID: $c_pid, Python PID: $py_pid)${NC}"
+
 	# Perform frequency change (only supported test attribute)
 	echo -e "  ${DIM}Changing frequency: $freq -> $alt_freq -> $freq${NC}"
 	./dpll pin set id "$pin_id" frequency "$alt_freq" 2>/dev/null || true
@@ -2884,6 +2889,15 @@ test_monitor_python_parity() {
 	kill $c_pid $py_pid 2>/dev/null || true
 	wait $c_pid $py_pid 2>/dev/null || true
 	sleep 1
+
+	# Count events before checking
+	local c_events=$(grep -c "\[PIN_CHANGE\]" "$c_monitor_out" 2>/dev/null | head -1)
+	c_events=${c_events:-0}
+	# Python CLI outputs 'name': 'pin-change-ntf' in dict format
+	local py_events=$(grep -c "'name': 'pin-change" "$py_monitor_out" 2>/dev/null | head -1)
+	py_events=${py_events:-0}
+
+	echo -e "  ${DIM}Monitors stopped, captured events: C=$c_events, Python=$py_events${NC}"
 
 	# Save outputs to persistent location for debugging
 	local persist_dir="/tmp/dpll_monitor_parity_debug"
@@ -2910,11 +2924,6 @@ test_monitor_python_parity() {
 	fi
 
 	# Test 1: Both captured events
-	local c_events=$(grep -c "\[PIN_CHANGE\]" "$c_monitor_out" 2>/dev/null | head -1)
-	c_events=${c_events:-0}
-	# Python CLI outputs 'name': 'pin-change-ntf' in dict format
-	local py_events=$(grep -c "'name': 'pin-change" "$py_monitor_out" 2>/dev/null | head -1)
-	py_events=${py_events:-0}
 
 	if [ "$c_events" -gt 0 ] && [ "$py_events" -gt 0 ]; then
 		print_result PASS "Both monitors captured events (C: $c_events, Python: $py_events)"
