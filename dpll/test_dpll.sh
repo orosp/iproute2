@@ -592,6 +592,24 @@ dpll_get_pin_array_value() {
 	return 0
 }
 
+# Get all values from array (one per line)
+# Usage: dpll_get_pin_array_values PIN_ID ARRAY_NAME
+# Example: dpll_get_pin_array_values 5 "capabilities"
+# Returns: array values, one per line
+dpll_get_pin_array_values() {
+	local pin_id="$1"
+	local array_name="$2"
+
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		return 1
+	fi
+
+	echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"$array_name\"[]? // empty" 2>> "$ERROR_LOG"
+	return 0
+}
+
 # Provede SET operaci na device
 # Usage: dpll_device_set DEVICE_ID ATTR VALUE [ATTR2 VALUE2 ...]
 dpll_device_set() {
@@ -909,7 +927,7 @@ dpll_find_pins_by_type() {
 
 	local matches=()
 	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
-		local type=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.type // empty' 2>> "$ERROR_LOG")
+		local type=$(dpll_get_pin_attr "$pin_id" "type")
 		if [ "$type" = "$pin_type" ]; then
 			matches+=("$pin_id")
 		fi
@@ -2307,11 +2325,11 @@ test_pin_frequency_change() {
 		local current_freq=$(dpll_get_pin_attr "$pin_id" "frequency")
 
 		# Get alternative frequency (try second in list)
-		local target_freq=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
+		local target_freq=$(dpll_get_pin_array_value "$pin_id" "frequency-supported" 1 "frequency-min")
 
 		if [ -z "$target_freq" ] || [ "$target_freq" = "$current_freq" ]; then
 			# Try first frequency if second doesn't work
-			target_freq=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][0]."frequency-min" // empty' 2>> "$ERROR_LOG")
+			target_freq=$(dpll_get_pin_array_value "$pin_id" "frequency-supported" 0 "frequency-min")
 		fi
 
 		if [ -n "$target_freq" ]; then
@@ -2370,8 +2388,8 @@ test_pin_priority_capability() {
 	fi
 
 	# Get parent-device info from cache
-	local parent_id=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["parent-device"][0]."parent-id" // empty' 2>> "$ERROR_LOG")
-	local parent_prio=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["parent-device"][0].prio // empty' 2>> "$ERROR_LOG")
+	local parent_id=$(dpll_get_pin_array_value "$pin_id" "parent-device" 0 "parent-id")
+	local parent_prio=$(dpll_get_pin_array_value "$pin_id" "parent-device" 0 "prio")
 
 	if [ -z "$parent_id" ] || [ -z "$parent_prio" ]; then
 		print_result SKIP "Pin $pin_id priority test (no parent-device prio)"
@@ -2389,7 +2407,7 @@ test_pin_priority_capability() {
 		dpll_invalidate_cache
 		dpll_load_pins
 
-		local current_prio=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"parent-device\"[] | select(.\"parent-id\" == $parent_id) | .prio // empty" 2>> "$ERROR_LOG")
+		local current_prio=$(dpll_get_parent_device_attr "$pin_id" "$parent_id" "prio")
 
 		if [ -z "$current_prio" ]; then
 			print_result FAIL "$test_name (cannot read prio after set)"
@@ -2480,7 +2498,7 @@ test_pin_capabilities_detailed() {
 	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
 		if dpll_pin_has_attr "$pin_id" "capabilities"; then
 			tested_pins=$((tested_pins + 1))
-			local capabilities=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.capabilities[]' 2>> "$ERROR_LOG")
+			local capabilities=$(dpll_get_pin_array_values "$pin_id" "capabilities")
 
 			for cap in $capabilities; do
 				capability_count=$((capability_count + 1))
@@ -2775,7 +2793,7 @@ test_reference_sync() {
 
 		if [ -n "$pin_id" ]; then
 			# Extract first reference-sync pin ID from the array
-			ref_pin_id=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["reference-sync"][0].id // empty' 2>> "$ERROR_LOG")
+			ref_pin_id=$(dpll_get_pin_array_value "$pin_id" "reference-sync" 0 "id")
 		fi
 
 		if [ -n "$pin_id" ] && [ -n "$ref_pin_id" ]; then
