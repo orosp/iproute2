@@ -571,6 +571,27 @@ dpll_pin_has_capability() {
 	[ "$has_cap" = "true" ]
 }
 
+# Get value from array by index
+# Usage: dpll_get_pin_array_value PIN_ID ARRAY_NAME INDEX ATTR_NAME
+# Example: dpll_get_pin_array_value 5 "frequency-supported" 0 "frequency-min"
+# Returns: attribute value or empty if not found
+dpll_get_pin_array_value() {
+	local pin_id="$1"
+	local array_name="$2"
+	local index="$3"
+	local attr_name="$4"
+
+	dpll_load_pins || return 1
+
+	if [ -z "${DPLL_PIN_CACHE[$pin_id]}" ]; then
+		echo ""
+		return 1
+	fi
+
+	echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r ".\"$array_name\"[$index].\"$attr_name\" // empty" 2>> "$ERROR_LOG"
+	return 0
+}
+
 # Provede SET operaci na device
 # Usage: dpll_device_set DEVICE_ID ATTR VALUE [ATTR2 VALUE2 ...]
 dpll_device_set() {
@@ -693,10 +714,10 @@ dpll_test_pin_freq_change() {
 	dpll_assert_not_empty "Pin $pin_id has current frequency" "$current_freq" || return 1
 
 	# Get alternative frequency (try second in list)
-	local freq_min=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
+	local freq_min=$(dpll_get_pin_array_value "$pin_id" "frequency-supported" 1 "frequency-min")
 	if [ -z "$freq_min" ] || [ "$freq_min" = "$current_freq" ]; then
 		# Try first frequency if second doesn't work
-		freq_min=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][0]."frequency-min" // empty' 2>> "$ERROR_LOG")
+		freq_min=$(dpll_get_pin_array_value "$pin_id" "frequency-supported" 0 "frequency-min")
 	fi
 
 	if [ -z "$freq_min" ]; then
@@ -2156,10 +2177,10 @@ test_phase_offset_monitoring() {
 		local found_phase_offset=0
 
 		for ((i=0; i<parent_count; i++)); do
-			local phase_offset=$(echo "${DPLL_PIN_CACHE[$pin_with_phase]}" | jq -r ".\"parent-device\"[$i].\"phase-offset\" // empty" 2>> "$ERROR_LOG")
+			local phase_offset=$(dpll_get_pin_array_value "$pin_with_phase" "parent-device" "$i" "phase-offset")
 			if [ -n "$phase_offset" ]; then
 				found_phase_offset=1
-				local parent_id=$(echo "${DPLL_PIN_CACHE[$pin_with_phase]}" | jq -r ".\"parent-device\"[$i].\"parent-id\"" 2>> "$ERROR_LOG")
+				local parent_id=$(dpll_get_pin_array_value "$pin_with_phase" "parent-device" "$i" "parent-id")
 				print_result PASS "Pin $pin_with_phase parent-device $parent_id phase-offset: $phase_offset"
 
 				# Validate phase-offset is a valid s64 (can be negative)
