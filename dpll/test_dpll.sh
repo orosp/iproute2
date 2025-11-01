@@ -2634,45 +2634,33 @@ test_monitor_events() {
 		return
 	fi
 
-	# Find a pin suitable for testing (has changeable attributes with top-level values)
-	local pin_id=""
+	# Find a pin suitable for testing - use frequency change (generates monitor events)
+	# Note: prio and direction are parent-device relationship attributes, not suitable
+	# for simple monitor event testing as they require parent context
+	dpll_load_pins || return
+	local pin_id=$(dpll_find_pin --with-capability "frequency-can-change" --with-attr "frequency")
 	local test_attr=""
 	local orig_value=""
 	local new_value=""
 
-	# Strategy 1: Find pin with priority-can-change capability AND has prio attribute
-	pin_id=$(dpll_find_pin --with-capability "priority-can-change" --with-attr "prio")
 	if [ -n "$pin_id" ]; then
-		test_attr="prio"
-		orig_value=$(dpll_get_pin_attr "$pin_id" "prio")
-		new_value=$((orig_value + 5))
-	fi
+		test_attr="frequency"
+		orig_value=$(dpll_get_pin_attr "$pin_id" "frequency")
+		local freq_count=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"] | length' 2>> "$ERROR_LOG" || echo 0)
 
-	# Strategy 2: Find pin with direction-can-change capability
-	if [ -z "$pin_id" ]; then
-		pin_id=$(dpll_find_pin --with-capability "direction-can-change" --with-attr "direction")
-		if [ -n "$pin_id" ]; then
-			test_attr="direction"
-			orig_value=$(dpll_get_pin_attr "$pin_id" "direction")
-			if [ "$orig_value" = "input" ]; then
-				new_value="output"
-			else
-				new_value="input"
-			fi
-		fi
-	fi
-
-	# Strategy 3: Find pin with changeable frequency
-	if [ -z "$pin_id" ]; then
-		pin_id=$(dpll_find_pin --with-capability "frequency-can-change" --with-attr "frequency")
-		if [ -n "$pin_id" ]; then
-			test_attr="frequency"
-			orig_value=$(dpll_get_pin_attr "$pin_id" "frequency")
+		if [ "$freq_count" -ge 2 ]; then
+			# Try to find alternative frequency
 			new_value=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][1]."frequency-min" // empty' 2>> "$ERROR_LOG")
 			if [ -z "$new_value" ] || [ "$new_value" = "$orig_value" ]; then
-				# No alternative frequency, clear pin_id
+				# Try first frequency if second doesn't work
+				new_value=$(echo "${DPLL_PIN_CACHE[$pin_id]}" | jq -r '.["frequency-supported"][0]."frequency-min" // empty' 2>> "$ERROR_LOG")
+			fi
+			if [ -z "$new_value" ] || [ "$new_value" = "$orig_value" ]; then
+				# No alternative frequency
 				pin_id=""
 			fi
+		else
+			pin_id=""
 		fi
 	fi
 
