@@ -62,12 +62,12 @@ static char *dpll_argv_next(struct dpll *dpll)
 {
 	char *ret;
 
-	dpll_arg_inc(dpll);  /* Skip keyword */
+	dpll_arg_inc(dpll); /* Skip keyword */
 	if (dpll_argc(dpll) == 0)
 		return NULL;
 
-	ret = *dpll->argv;   /* Get value */
-	dpll_arg_inc(dpll);  /* Skip value */
+	ret = *dpll->argv; /* Get value */
+	dpll_arg_inc(dpll); /* Skip value */
 	return ret;
 }
 
@@ -152,77 +152,77 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
  */
 
 /* Parse U32 argument into a variable */
-#define DPLL_PARSE_U32(dpll, arg_name, var_ptr) \
-	do { \
-		char *__str = dpll_argv_next(dpll); \
-		if (!__str) { \
-			pr_err("%s requires an argument\n", arg_name); \
-			return -EINVAL; \
-		} \
-		if (get_u32(var_ptr, __str, 0)) { \
-			pr_err("invalid %s: %s\n", arg_name, __str); \
-			return -EINVAL; \
-		} \
+#define DPLL_PARSE_U32(dpll, arg_name, var_ptr)                                \
+	do {                                                                   \
+		char *__str = dpll_argv_next(dpll);                            \
+		if (!__str) {                                                  \
+			pr_err("%s requires an argument\n", arg_name);         \
+			return -EINVAL;                                        \
+		}                                                              \
+		if (get_u32(var_ptr, __str, 0)) {                              \
+			pr_err("invalid %s: %s\n", arg_name, __str);           \
+			return -EINVAL;                                        \
+		}                                                              \
 	} while (0)
 
 /* Parse U32 argument and add to netlink message */
-#define DPLL_PARSE_ATTR_U32(dpll, nlh, arg_name, attr_id) \
-	do { \
-		__u32 __val; \
-		DPLL_PARSE_U32(dpll, arg_name, &__val); \
-		mnl_attr_put_u32(nlh, attr_id, __val); \
+#define DPLL_PARSE_ATTR_U32(dpll, nlh, arg_name, attr_id)                      \
+	do {                                                                   \
+		__u32 __val;                                                   \
+		DPLL_PARSE_U32(dpll, arg_name, &__val);                        \
+		mnl_attr_put_u32(nlh, attr_id, __val);                         \
 	} while (0)
 
-#define DPLL_PARSE_ATTR_S32(dpll, nlh, arg_name, attr_id) \
-	do { \
-		__s32 __val; \
-		char *__str = dpll_argv_next(dpll); \
-		if (!__str) { \
-			pr_err("%s requires an argument\n", arg_name); \
-			return -EINVAL; \
-		} \
-		if (get_s32(&__val, __str, 0)) { \
-			pr_err("invalid %s: %s\n", arg_name, __str); \
-			return -EINVAL; \
-		} \
-		mnl_attr_put_u32(nlh, attr_id, __val); \
+#define DPLL_PARSE_ATTR_S32(dpll, nlh, arg_name, attr_id)                      \
+	do {                                                                   \
+		__s32 __val;                                                   \
+		char *__str = dpll_argv_next(dpll);                            \
+		if (!__str) {                                                  \
+			pr_err("%s requires an argument\n", arg_name);         \
+			return -EINVAL;                                        \
+		}                                                              \
+		if (get_s32(&__val, __str, 0)) {                               \
+			pr_err("invalid %s: %s\n", arg_name, __str);           \
+			return -EINVAL;                                        \
+		}                                                              \
+		mnl_attr_put_u32(nlh, attr_id, __val);                         \
 	} while (0)
 
-#define DPLL_PARSE_ATTR_U64(dpll, nlh, arg_name, attr_id) \
-	do { \
-		__u64 __val; \
-		char *__str = dpll_argv_next(dpll); \
-		if (!__str) { \
-			pr_err("%s requires an argument\n", arg_name); \
-			return -EINVAL; \
-		} \
-		if (get_u64(&__val, __str, 0)) { \
-			pr_err("invalid %s: %s\n", arg_name, __str); \
-			return -EINVAL; \
-		} \
-		mnl_attr_put_u64(nlh, attr_id, __val); \
+#define DPLL_PARSE_ATTR_U64(dpll, nlh, arg_name, attr_id)                      \
+	do {                                                                   \
+		__u64 __val;                                                   \
+		char *__str = dpll_argv_next(dpll);                            \
+		if (!__str) {                                                  \
+			pr_err("%s requires an argument\n", arg_name);         \
+			return -EINVAL;                                        \
+		}                                                              \
+		if (get_u64(&__val, __str, 0)) {                               \
+			pr_err("invalid %s: %s\n", arg_name, __str);           \
+			return -EINVAL;                                        \
+		}                                                              \
+		mnl_attr_put_u64(nlh, attr_id, __val);                         \
 	} while (0)
 
-#define DPLL_PARSE_ATTR_STR(dpll, nlh, arg_name, attr_id) \
-	do { \
-		char *__str = dpll_argv_next(dpll); \
-		if (!__str) { \
-			pr_err("%s requires an argument\n", arg_name); \
-			return -EINVAL; \
-		} \
-		mnl_attr_put_strz(nlh, attr_id, __str); \
+#define DPLL_PARSE_ATTR_STR(dpll, nlh, arg_name, attr_id)                      \
+	do {                                                                   \
+		char *__str = dpll_argv_next(dpll);                            \
+		if (!__str) {                                                  \
+			pr_err("%s requires an argument\n", arg_name);         \
+			return -EINVAL;                                        \
+		}                                                              \
+		mnl_attr_put_strz(nlh, attr_id, __str);                        \
 	} while (0)
 
-#define DPLL_PARSE_ATTR_ENUM(dpll, nlh, arg_name, attr_id, parse_func) \
-	do { \
-		__u32 __val; \
-		dpll_arg_inc(dpll); \
-		if (dpll_arg_required(dpll, arg_name)) \
-			return -EINVAL; \
-		if (parse_func(dpll, &__val)) \
-			return -EINVAL; \
-		mnl_attr_put_u32(nlh, attr_id, __val); \
-		dpll_arg_inc(dpll); \
+#define DPLL_PARSE_ATTR_ENUM(dpll, nlh, arg_name, attr_id, parse_func)         \
+	do {                                                                   \
+		__u32 __val;                                                   \
+		dpll_arg_inc(dpll);                                            \
+		if (dpll_arg_required(dpll, arg_name))                         \
+			return -EINVAL;                                        \
+		if (parse_func(dpll, &__val))                                  \
+			return -EINVAL;                                        \
+		mnl_attr_put_u32(nlh, attr_id, __val);                         \
+		dpll_arg_inc(dpll);                                            \
 	} while (0)
 
 /* Macros for printing netlink attributes
@@ -234,52 +234,53 @@ static bool dpll_argv_match_inc(struct dpll *dpll, const char *pattern)
  */
 
 /* Generic versions with custom format */
-#define DPLL_PR_INT_FMT(tb, attr_id, name, format_str) \
-	do { \
-		if (tb[attr_id]) \
-			print_int(PRINT_ANY, name, format_str, \
-				  mnl_attr_get_u32(tb[attr_id])); \
+#define DPLL_PR_INT_FMT(tb, attr_id, name, format_str)                         \
+	do {                                                                   \
+		if (tb[attr_id])                                               \
+			print_int(PRINT_ANY, name, format_str,                 \
+				  mnl_attr_get_u32(tb[attr_id]));              \
 	} while (0)
 
-#define DPLL_PR_UINT_FMT(tb, attr_id, name, format_str) \
-	do { \
-		if (tb[attr_id]) \
-			print_uint(PRINT_ANY, name, format_str, \
-				   mnl_attr_get_u32(tb[attr_id])); \
+#define DPLL_PR_UINT_FMT(tb, attr_id, name, format_str)                        \
+	do {                                                                   \
+		if (tb[attr_id])                                               \
+			print_uint(PRINT_ANY, name, format_str,                \
+				   mnl_attr_get_u32(tb[attr_id]));             \
 	} while (0)
 
-#define DPLL_PR_U64_FMT(tb, attr_id, name, format_str) \
-	do { \
-		if (tb[attr_id]) \
-			print_lluint(PRINT_ANY, name, format_str, \
-				     mnl_attr_get_u64(tb[attr_id])); \
+#define DPLL_PR_U64_FMT(tb, attr_id, name, format_str)                         \
+	do {                                                                   \
+		if (tb[attr_id])                                               \
+			print_lluint(PRINT_ANY, name, format_str,              \
+				     mnl_attr_get_u64(tb[attr_id]));           \
 	} while (0)
 
-#define DPLL_PR_S64_FMT(tb, attr_id, name, format_str) \
-	do { \
-		if (tb[attr_id]) \
-			print_lluint(PRINT_ANY, name, format_str, \
-				     (long long)mnl_attr_get_u64(tb[attr_id])); \
+#define DPLL_PR_S64_FMT(tb, attr_id, name, format_str)                         \
+	do {                                                                   \
+		if (tb[attr_id])                                               \
+			print_lluint(                                          \
+				PRINT_ANY, name, format_str,                   \
+				(long long)mnl_attr_get_u64(tb[attr_id]));     \
 	} while (0)
 
-#define DPLL_PR_STR_FMT(tb, attr_id, name, format_str) \
-	do { \
-		if (tb[attr_id]) \
-			print_string(PRINT_ANY, name, format_str, \
-				     mnl_attr_get_str(tb[attr_id])); \
+#define DPLL_PR_STR_FMT(tb, attr_id, name, format_str)                         \
+	do {                                                                   \
+		if (tb[attr_id])                                               \
+			print_string(PRINT_ANY, name, format_str,              \
+				     mnl_attr_get_str(tb[attr_id]));           \
 	} while (0)
 
 /* Simple versions with auto-generated format */
-#define DPLL_PR_INT(tb, attr_id, name) \
+#define DPLL_PR_INT(tb, attr_id, name)                                         \
 	DPLL_PR_INT_FMT(tb, attr_id, name, "  " name ": %d\n")
 
-#define DPLL_PR_UINT(tb, attr_id, name) \
+#define DPLL_PR_UINT(tb, attr_id, name)                                        \
 	DPLL_PR_UINT_FMT(tb, attr_id, name, "  " name ": %u\n")
 
-#define DPLL_PR_U64(tb, attr_id, name) \
+#define DPLL_PR_U64(tb, attr_id, name)                                         \
 	DPLL_PR_U64_FMT(tb, attr_id, name, "  " name ": %llu\n")
 
-#define DPLL_PR_S64(tb, attr_id, name) \
+#define DPLL_PR_S64(tb, attr_id, name)                                         \
 	DPLL_PR_S64_FMT(tb, attr_id, name, "  " name ": %lld\n")
 
 /* Helper to read signed int (can be s32 or s64 depending on value) */
@@ -296,67 +297,76 @@ static inline __s64 mnl_attr_get_sint(const struct nlattr *attr)
 	}
 }
 
-#define DPLL_PR_SINT_FMT(tb, attr_id, name, format_str) \
-	do { \
-		if (tb[attr_id]) \
-			print_s64(PRINT_ANY, name, format_str, \
-				  mnl_attr_get_sint(tb[attr_id])); \
+#define DPLL_PR_SINT_FMT(tb, attr_id, name, format_str)                        \
+	do {                                                                   \
+		if (tb[attr_id])                                               \
+			print_s64(PRINT_ANY, name, format_str,                 \
+				  mnl_attr_get_sint(tb[attr_id]));             \
 	} while (0)
 
-#define DPLL_PR_SINT(tb, attr_id, name) \
+#define DPLL_PR_SINT(tb, attr_id, name)                                        \
 	DPLL_PR_SINT_FMT(tb, attr_id, name, "  " name ": %lld\n")
 
-#define DPLL_PR_STR(tb, attr_id, name) \
+#define DPLL_PR_STR(tb, attr_id, name)                                         \
 	DPLL_PR_STR_FMT(tb, attr_id, name, "  " name ": %s\n")
 
 /* Macros for printing enum values converted to strings via name function */
 
 /* Generic version with custom format */
-#define DPLL_PR_ENUM_STR_FMT(tb, attr_id, name, format_str, name_func) \
-	do { \
-		if (tb[attr_id]) \
-			print_string(PRINT_ANY, name, format_str, \
-				     name_func(mnl_attr_get_u32(tb[attr_id]))); \
+#define DPLL_PR_ENUM_STR_FMT(tb, attr_id, name, format_str, name_func)         \
+	do {                                                                   \
+		if (tb[attr_id])                                               \
+			print_string(                                          \
+				PRINT_ANY, name, format_str,                   \
+				name_func(mnl_attr_get_u32(tb[attr_id])));     \
 	} while (0)
 
 /* Simple version with auto-generated format */
-#define DPLL_PR_ENUM_STR(tb, attr_id, name, name_func) \
+#define DPLL_PR_ENUM_STR(tb, attr_id, name, name_func)                         \
 	DPLL_PR_ENUM_STR_FMT(tb, attr_id, name, "  " name ": %s\n", name_func)
 
 /* Multi-attr enum printer - handles multiple occurrences of same attribute */
-#define DPLL_PR_MULTI_ENUM_STR(nlh, attr_id, name, name_func) \
-	do { \
-		if (nlh) { \
-			struct genlmsghdr *__genl = mnl_nlmsg_get_payload(nlh); \
-			struct nlattr *__attr; \
-			bool __first = true; \
-			mnl_attr_for_each(__attr, nlh, sizeof(*__genl)) { \
-				if (mnl_attr_get_type(__attr) == (attr_id)) { \
-					__u32 __val = mnl_attr_get_u32(__attr); \
-					if (__first) { \
-						if (is_json_context()) { \
-							open_json_array(PRINT_JSON, name); \
-						} else { \
+#define DPLL_PR_MULTI_ENUM_STR(nlh, attr_id, name, name_func)                  \
+	do {                                                                   \
+		if (nlh) {                                                     \
+			struct genlmsghdr *__genl =                            \
+				mnl_nlmsg_get_payload(nlh);                    \
+			struct nlattr *__attr;                                 \
+			bool __first = true;                                   \
+			mnl_attr_for_each(__attr, nlh, sizeof(*__genl))        \
+			{                                                      \
+				if (mnl_attr_get_type(__attr) == (attr_id)) {  \
+					__u32 __val =                          \
+						mnl_attr_get_u32(__attr);      \
+					if (__first) {                         \
+						if (is_json_context()) {       \
+							open_json_array(       \
+								PRINT_JSON,    \
+								name);         \
+						} else {                       \
 							pr_out("  " name ":"); \
-						} \
-						__first = false; \
-					} \
-					if (is_json_context()) { \
-						print_string(PRINT_JSON, NULL, NULL, \
-							     name_func(__val)); \
-					} else { \
-						pr_out(" %s", name_func(__val)); \
-					} \
-				} \
-			} \
-			if (!__first) { \
-				if (is_json_context()) { \
-					close_json_array(PRINT_JSON, NULL); \
-				} else { \
-					pr_out("\n"); \
-				} \
-			} \
-		} \
+						}                              \
+						__first = false;               \
+					}                                      \
+					if (is_json_context()) {               \
+						print_string(                  \
+							PRINT_JSON, NULL,      \
+							NULL,                  \
+							name_func(__val));     \
+					} else {                               \
+						pr_out(" %s",                  \
+						       name_func(__val));      \
+					}                                      \
+				}                                              \
+			}                                                      \
+			if (!__first) {                                        \
+				if (is_json_context()) {                       \
+					close_json_array(PRINT_JSON, NULL);    \
+				} else {                                       \
+					pr_out("\n");                          \
+				}                                              \
+			}                                                      \
+		}                                                              \
 	} while (0)
 
 static void help(void)
@@ -425,9 +435,9 @@ static void dpll_free(struct dpll *dpll)
 int main(int argc, char **argv)
 {
 	static const struct option long_options[] = {
-		{ "Version",	no_argument,		NULL, 'V' },
-		{ "json",	no_argument,		NULL, 'j' },
-		{ "pretty",	no_argument,		NULL, 'p' },
+		{ "Version", no_argument, NULL, 'V' },
+		{ "json", no_argument, NULL, 'j' },
+		{ "pretty", no_argument, NULL, 'p' },
 		{ NULL, 0, NULL, 0 }
 	};
 	const char *opt_short = "Vjp";
@@ -442,8 +452,8 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
-	while ((opt = getopt_long(argc, argv, opt_short,
-				  long_options, NULL)) >= 0) {
+	while ((opt = getopt_long(argc, argv, opt_short, long_options, NULL)) >=
+	       0) {
 		switch (opt) {
 		case 'V':
 			printf("dpll utility, iproute2-%s\n", version);
@@ -622,7 +632,8 @@ static int attr_pin_cb(const struct nlattr *attr, void *data)
 }
 
 /* Device printing from netlink attributes */
-static void dpll_device_print_attrs(const struct nlmsghdr *nlh, struct nlattr **tb)
+static void dpll_device_print_attrs(const struct nlmsghdr *nlh,
+				    struct nlattr **tb)
 {
 	DPLL_PR_UINT_FMT(tb, DPLL_A_ID, "id", "device id %u:\n");
 
@@ -642,11 +653,14 @@ static void dpll_device_print_attrs(const struct nlmsghdr *nlh, struct nlattr **
 
 	DPLL_PR_ENUM_STR(tb, DPLL_A_TYPE, "type", dpll_type_name);
 
-	DPLL_PR_ENUM_STR(tb, DPLL_A_LOCK_STATUS, "lock-status", dpll_lock_status_name);
+	DPLL_PR_ENUM_STR(tb, DPLL_A_LOCK_STATUS, "lock-status",
+			 dpll_lock_status_name);
 
-	DPLL_PR_ENUM_STR(tb, DPLL_A_LOCK_STATUS_ERROR, "lock-status-error", dpll_lock_status_error_name);
+	DPLL_PR_ENUM_STR(tb, DPLL_A_LOCK_STATUS_ERROR, "lock-status-error",
+			 dpll_lock_status_error_name);
 
-	DPLL_PR_MULTI_ENUM_STR(nlh, DPLL_A_CLOCK_QUALITY_LEVEL, "clock-quality-level",
+	DPLL_PR_MULTI_ENUM_STR(nlh, DPLL_A_CLOCK_QUALITY_LEVEL,
+			       "clock-quality-level",
 			       dpll_clock_quality_level_name);
 
 	if (tb[DPLL_A_TEMP]) {
@@ -657,11 +671,13 @@ static void dpll_device_print_attrs(const struct nlmsghdr *nlh, struct nlattr **
 		} else {
 			int temp_int = temp / 1000;
 			int temp_frac = abs(temp % 1000);
-			pr_out("  temperature: %d.%03d C\n", temp_int, temp_frac);
+			pr_out("  temperature: %d.%03d C\n", temp_int,
+			       temp_frac);
 		}
 	}
 
-	DPLL_PR_MULTI_ENUM_STR(nlh, DPLL_A_MODE_SUPPORTED, "mode-supported", dpll_mode_name);
+	DPLL_PR_MULTI_ENUM_STR(nlh, DPLL_A_MODE_SUPPORTED, "mode-supported",
+			       dpll_mode_name);
 
 	if (tb[DPLL_A_PHASE_OFFSET_MONITOR]) {
 		__u32 value = mnl_attr_get_u32(tb[DPLL_A_PHASE_OFFSET_MONITOR]);
@@ -670,7 +686,8 @@ static void dpll_device_print_attrs(const struct nlmsghdr *nlh, struct nlattr **
 			     value ? "enable" : "disable");
 	}
 
-	DPLL_PR_UINT(tb, DPLL_A_PHASE_OFFSET_AVG_FACTOR, "phase-offset-avg-factor");
+	DPLL_PR_UINT(tb, DPLL_A_PHASE_OFFSET_AVG_FACTOR,
+		     "phase-offset-avg-factor");
 }
 
 /* Callback for device get (single) */
@@ -706,7 +723,7 @@ static int cmd_device_show_id(struct dpll *dpll, __u32 id)
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_DEVICE_GET,
-					   NLM_F_REQUEST | NLM_F_ACK);
+					  NLM_F_REQUEST | NLM_F_ACK);
 	mnl_attr_put_u32(nlh, DPLL_A_ID, id);
 
 	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_show_cb, NULL);
@@ -724,12 +741,14 @@ static int cmd_device_show_dump(struct dpll *dpll)
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_DEVICE_GET,
-					   NLM_F_REQUEST | NLM_F_ACK | NLM_F_DUMP);
+					  NLM_F_REQUEST | NLM_F_ACK |
+						  NLM_F_DUMP);
 
 	/* Open JSON array for multiple devices */
 	open_json_array(PRINT_JSON, "device");
 
-	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_show_dump_cb, NULL);
+	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_show_dump_cb,
+				     NULL);
 	if (err < 0) {
 		pr_err("Failed to dump devices\n");
 		close_json_array(PRINT_JSON, NULL);
@@ -772,7 +791,7 @@ static int cmd_device_set(struct dpll *dpll)
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_DEVICE_SET,
-					   NLM_F_REQUEST | NLM_F_ACK);
+					  NLM_F_REQUEST | NLM_F_ACK);
 
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
@@ -788,15 +807,20 @@ static int cmd_device_set(struct dpll *dpll)
 				return -EINVAL;
 			}
 			if (strcmp(str, "true") == 0 || strcmp(str, "1") == 0) {
-				mnl_attr_put_u32(nlh, DPLL_A_PHASE_OFFSET_MONITOR, 1);
-			} else if (strcmp(str, "false") == 0 || strcmp(str, "0") == 0) {
-				mnl_attr_put_u32(nlh, DPLL_A_PHASE_OFFSET_MONITOR, 0);
+				mnl_attr_put_u32(
+					nlh, DPLL_A_PHASE_OFFSET_MONITOR, 1);
+			} else if (strcmp(str, "false") == 0 ||
+				   strcmp(str, "0") == 0) {
+				mnl_attr_put_u32(
+					nlh, DPLL_A_PHASE_OFFSET_MONITOR, 0);
 			} else {
-				pr_err("invalid phase-offset-monitor value: %s (use true/false)\n", str);
+				pr_err("invalid phase-offset-monitor value: %s (use true/false)\n",
+				       str);
 				return -EINVAL;
 			}
 		} else if (dpll_argv_match(dpll, "phase-offset-avg-factor")) {
-			DPLL_PARSE_ATTR_U32(dpll, nlh, "phase-offset-avg-factor",
+			DPLL_PARSE_ATTR_U32(dpll, nlh,
+					    "phase-offset-avg-factor",
 					    DPLL_A_PHASE_OFFSET_AVG_FACTOR);
 		} else {
 			pr_err("unknown option: %s\n", dpll_argv(dpll));
@@ -849,14 +873,16 @@ static int cmd_device_id_get(struct dpll *dpll)
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_DEVICE_ID_GET,
-					   NLM_F_REQUEST | NLM_F_ACK);
+					  NLM_F_REQUEST | NLM_F_ACK);
 
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "module-name")) {
-			DPLL_PARSE_ATTR_STR(dpll, nlh, "module-name", DPLL_A_MODULE_NAME);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "module-name",
+					    DPLL_A_MODULE_NAME);
 		} else if (dpll_argv_match(dpll, "clock-id")) {
-			DPLL_PARSE_ATTR_U64(dpll, nlh, "clock-id", DPLL_A_CLOCK_ID);
+			DPLL_PARSE_ATTR_U64(dpll, nlh, "clock-id",
+					    DPLL_A_CLOCK_ID);
 		} else if (dpll_argv_match(dpll, "type")) {
 			char *str = dpll_argv_next(dpll);
 
@@ -865,9 +891,11 @@ static int cmd_device_id_get(struct dpll *dpll)
 				return -EINVAL;
 			}
 			if (strcmp(str, "pps") == 0) {
-				mnl_attr_put_u32(nlh, DPLL_A_TYPE, DPLL_TYPE_PPS);
+				mnl_attr_put_u32(nlh, DPLL_A_TYPE,
+						 DPLL_TYPE_PPS);
 			} else if (strcmp(str, "eec") == 0) {
-				mnl_attr_put_u32(nlh, DPLL_A_TYPE, DPLL_TYPE_EEC);
+				mnl_attr_put_u32(nlh, DPLL_A_TYPE,
+						 DPLL_TYPE_EEC);
 			} else {
 				pr_err("invalid type: %s (use pps/eec)\n", str);
 				return -EINVAL;
@@ -878,7 +906,8 @@ static int cmd_device_id_get(struct dpll *dpll)
 		}
 	}
 
-	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_id_get_cb, &found);
+	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_device_id_get_cb,
+				     &found);
 	if (err < 0) {
 		pr_err("Failed to get device id\n");
 		return -1;
@@ -905,7 +934,8 @@ static int cmd_device(struct dpll *dpll)
 		return cmd_device_id_get(dpll);
 	}
 
-	pr_err("Command \"%s\" not found\n", dpll_argv(dpll) ? dpll_argv(dpll) : "");
+	pr_err("Command \"%s\" not found\n",
+	       dpll_argv(dpll) ? dpll_argv(dpll) : "");
 	return -ENOENT;
 }
 
@@ -984,7 +1014,7 @@ static void dpll_pin_capabilities_name(__u32 capabilities)
 /* Helper structures for multi-attr collection */
 struct multi_attr_ctx {
 	int count;
-	struct nlattr **entries;  /* dynamically allocated */
+	struct nlattr **entries; /* dynamically allocated */
 };
 
 /* Pin printing from netlink attributes */
@@ -1015,7 +1045,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print frequency-supported ranges */
 	if (tb[DPLL_A_PIN_FREQUENCY_SUPPORTED]) {
-		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_FREQUENCY_SUPPORTED];
+		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)
+			tb[DPLL_A_PIN_FREQUENCY_SUPPORTED];
 		int i;
 
 		open_json_array(PRINT_JSON, "frequency-supported");
@@ -1027,30 +1058,40 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			struct nlattr *tb_freq[DPLL_A_PIN_MAX + 1] = {};
 			__u64 freq_min = 0, freq_max = 0;
 
-			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_freq);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb,
+					      tb_freq);
 
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
-				freq_min = mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MIN]);
+				freq_min = mnl_attr_get_u64(
+					tb_freq[DPLL_A_PIN_FREQUENCY_MIN]);
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
-				freq_max = mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MAX]);
+				freq_max = mnl_attr_get_u64(
+					tb_freq[DPLL_A_PIN_FREQUENCY_MAX]);
 
 			open_json_object(NULL);
 
 			/* JSON: always print both min and max */
 			if (is_json_context()) {
 				if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
-					print_lluint(PRINT_JSON, "frequency-min", NULL, freq_min);
+					print_lluint(PRINT_JSON,
+						     "frequency-min", NULL,
+						     freq_min);
 				if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
-					print_lluint(PRINT_JSON, "frequency-max", NULL, freq_max);
+					print_lluint(PRINT_JSON,
+						     "frequency-max", NULL,
+						     freq_max);
 			} else {
 				/* Legacy: if min == max, print single value, else print range */
 				pr_out("    ");
 				if (freq_min == freq_max) {
-					print_lluint(PRINT_FP, NULL, "%llu Hz\n", freq_min);
+					print_lluint(PRINT_FP, NULL,
+						     "%llu Hz\n", freq_min);
 				} else {
-					print_lluint(PRINT_FP, NULL, "%llu", freq_min);
+					print_lluint(PRINT_FP, NULL, "%llu",
+						     freq_min);
 					pr_out("-");
-					print_lluint(PRINT_FP, NULL, "%llu Hz\n", freq_max);
+					print_lluint(PRINT_FP, NULL,
+						     "%llu Hz\n", freq_max);
 				}
 			}
 
@@ -1065,11 +1106,14 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		if (is_json_context()) {
 			open_json_array(PRINT_JSON, "capabilities");
 			if (caps & DPLL_PIN_CAPABILITIES_STATE_CAN_CHANGE)
-				print_string(PRINT_JSON, NULL, NULL, "state-can-change");
+				print_string(PRINT_JSON, NULL, NULL,
+					     "state-can-change");
 			if (caps & DPLL_PIN_CAPABILITIES_PRIORITY_CAN_CHANGE)
-				print_string(PRINT_JSON, NULL, NULL, "priority-can-change");
+				print_string(PRINT_JSON, NULL, NULL,
+					     "priority-can-change");
 			if (caps & DPLL_PIN_CAPABILITIES_DIRECTION_CAN_CHANGE)
-				print_string(PRINT_JSON, NULL, NULL, "direction-can-change");
+				print_string(PRINT_JSON, NULL, NULL,
+					     "direction-can-change");
 			close_json_array(PRINT_JSON, NULL);
 		} else {
 			pr_out("  capabilities: 0x%x", caps);
@@ -1085,14 +1129,16 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST, "phase-adjust");
 
 	/* Print fractional frequency offset */
-	DPLL_PR_SINT(tb, DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET, "fractional-frequency-offset");
+	DPLL_PR_SINT(tb, DPLL_A_PIN_FRACTIONAL_FREQUENCY_OFFSET,
+		     "fractional-frequency-offset");
 
 	/* Print esync frequency and related attributes */
 	DPLL_PR_U64_FMT(tb, DPLL_A_PIN_ESYNC_FREQUENCY, "esync_frequency",
 			"  esync-frequency: %llu Hz\n");
 
 	if (tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED]) {
-		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED];
+		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)
+			tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED];
 		int i;
 
 		open_json_array(PRINT_JSON, "esync-frequency-supported");
@@ -1104,30 +1150,40 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 			struct nlattr *tb_freq[DPLL_A_PIN_MAX + 1] = {};
 			__u64 freq_min = 0, freq_max = 0;
 
-			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_freq);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb,
+					      tb_freq);
 
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
-				freq_min = mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MIN]);
+				freq_min = mnl_attr_get_u64(
+					tb_freq[DPLL_A_PIN_FREQUENCY_MIN]);
 			if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
-				freq_max = mnl_attr_get_u64(tb_freq[DPLL_A_PIN_FREQUENCY_MAX]);
+				freq_max = mnl_attr_get_u64(
+					tb_freq[DPLL_A_PIN_FREQUENCY_MAX]);
 
 			open_json_object(NULL);
 
 			/* JSON: always print both min and max */
 			if (is_json_context()) {
 				if (tb_freq[DPLL_A_PIN_FREQUENCY_MIN])
-					print_lluint(PRINT_JSON, "frequency-min", NULL, freq_min);
+					print_lluint(PRINT_JSON,
+						     "frequency-min", NULL,
+						     freq_min);
 				if (tb_freq[DPLL_A_PIN_FREQUENCY_MAX])
-					print_lluint(PRINT_JSON, "frequency-max", NULL, freq_max);
+					print_lluint(PRINT_JSON,
+						     "frequency-max", NULL,
+						     freq_max);
 			} else {
 				/* Legacy: if min == max, print single value, else print range */
 				pr_out("    ");
 				if (freq_min == freq_max) {
-					print_lluint(PRINT_FP, NULL, "%llu Hz\n", freq_min);
+					print_lluint(PRINT_FP, NULL,
+						     "%llu Hz\n", freq_min);
 				} else {
-					print_lluint(PRINT_FP, NULL, "%llu", freq_min);
+					print_lluint(PRINT_FP, NULL, "%llu",
+						     freq_min);
 					pr_out("-");
-					print_lluint(PRINT_FP, NULL, "%llu Hz\n", freq_max);
+					print_lluint(PRINT_FP, NULL,
+						     "%llu Hz\n", freq_max);
 				}
 			}
 
@@ -1141,7 +1197,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print parent-device relationships */
 	if (tb[DPLL_A_PIN_PARENT_DEVICE]) {
-		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_PARENT_DEVICE];
+		struct multi_attr_ctx *ctx =
+			(struct multi_attr_ctx *)tb[DPLL_A_PIN_PARENT_DEVICE];
 		int i;
 
 		open_json_array(PRINT_JSON, "parent-device");
@@ -1151,28 +1208,33 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		/* Iterate through all collected parent-device entries */
 		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_parent[DPLL_A_PIN_MAX + 1] = {};
-			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_parent);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb,
+					      tb_parent);
 
 			open_json_object(NULL);
 			if (!is_json_context())
 				pr_out("    ");
 
-			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
-					 "id %u");
-			DPLL_PR_ENUM_STR_FMT(tb_parent, DPLL_A_PIN_DIRECTION, "direction",
-					     " direction %s", dpll_pin_direction_name);
+			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PARENT_ID,
+					 "parent-id", "id %u");
+			DPLL_PR_ENUM_STR_FMT(tb_parent, DPLL_A_PIN_DIRECTION,
+					     "direction", " direction %s",
+					     dpll_pin_direction_name);
 			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PRIO, "prio",
 					 " prio %u");
-			DPLL_PR_ENUM_STR_FMT(tb_parent, DPLL_A_PIN_STATE, "state",
-					     " state %s", dpll_pin_state_name);
+			DPLL_PR_ENUM_STR_FMT(tb_parent, DPLL_A_PIN_STATE,
+					     "state", " state %s",
+					     dpll_pin_state_name);
 			if (tb_parent[DPLL_A_PIN_PHASE_OFFSET]) {
-				struct nlattr *attr = tb_parent[DPLL_A_PIN_PHASE_OFFSET];
+				struct nlattr *attr =
+					tb_parent[DPLL_A_PIN_PHASE_OFFSET];
 				__s64 phase_offset;
 
-				memcpy(&phase_offset, mnl_attr_get_payload(attr), sizeof(__s64));
+				memcpy(&phase_offset,
+				       mnl_attr_get_payload(attr),
+				       sizeof(__s64));
 				print_s64(PRINT_ANY, "phase-offset",
-					     " phase-offset %lld",
-					     phase_offset);
+					  " phase-offset %lld", phase_offset);
 			}
 
 			if (!is_json_context())
@@ -1184,7 +1246,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print parent-pin relationships */
 	if (tb[DPLL_A_PIN_PARENT_PIN]) {
-		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_PARENT_PIN];
+		struct multi_attr_ctx *ctx =
+			(struct multi_attr_ctx *)tb[DPLL_A_PIN_PARENT_PIN];
 		int i;
 
 		open_json_array(PRINT_JSON, "parent-pin");
@@ -1193,16 +1256,18 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_parent[DPLL_A_PIN_MAX + 1] = {};
-			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_parent);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb,
+					      tb_parent);
 
 			open_json_object(NULL);
 			if (!is_json_context())
 				pr_out("    ");
 
-			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PARENT_ID, "parent-id",
-					 "id %u");
-			DPLL_PR_ENUM_STR_FMT(tb_parent, DPLL_A_PIN_STATE, "state",
-					     " state %s", dpll_pin_state_name);
+			DPLL_PR_UINT_FMT(tb_parent, DPLL_A_PIN_PARENT_ID,
+					 "parent-id", "id %u");
+			DPLL_PR_ENUM_STR_FMT(tb_parent, DPLL_A_PIN_STATE,
+					     "state", " state %s",
+					     dpll_pin_state_name);
 
 			if (!is_json_context())
 				pr_out("\n");
@@ -1213,7 +1278,8 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 	/* Print reference-sync capable pins */
 	if (tb[DPLL_A_PIN_REFERENCE_SYNC]) {
-		struct multi_attr_ctx *ctx = (struct multi_attr_ctx *)tb[DPLL_A_PIN_REFERENCE_SYNC];
+		struct multi_attr_ctx *ctx =
+			(struct multi_attr_ctx *)tb[DPLL_A_PIN_REFERENCE_SYNC];
 		int i;
 
 		open_json_array(PRINT_JSON, "reference-sync");
@@ -1222,14 +1288,14 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 
 		for (i = 0; i < ctx->count; i++) {
 			struct nlattr *tb_ref[DPLL_A_PIN_MAX + 1] = {};
-			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb, tb_ref);
+			mnl_attr_parse_nested(ctx->entries[i], attr_pin_cb,
+					      tb_ref);
 
 			open_json_object(NULL);
 			if (!is_json_context())
 				pr_out("    ");
 
-			DPLL_PR_UINT_FMT(tb_ref, DPLL_A_PIN_ID, "id",
-					 "pin %u");
+			DPLL_PR_UINT_FMT(tb_ref, DPLL_A_PIN_ID, "id", "pin %u");
 			DPLL_PR_ENUM_STR_FMT(tb_ref, DPLL_A_PIN_STATE, "state",
 					     " state %s", dpll_pin_state_name);
 
@@ -1257,8 +1323,7 @@ static int count_multi_attr_cb(const struct nlattr *attr, void *data)
 
 /* Helper to count specific multi-attr type occurrences */
 static unsigned int multi_attr_count_get(const struct nlmsghdr *nlh,
-					  struct genlmsghdr *genl,
-					  int attr_type)
+					 struct genlmsghdr *genl, int attr_type)
 {
 	struct {
 		int attr_type;
@@ -1308,7 +1373,8 @@ static int collect_multi_attr_cb(const struct nlattr *attr, void *data)
 	int type = mnl_attr_get_type(attr);
 
 	if (type == collector->attr_type) {
-		collector->ctx->entries[collector->ctx->count++] = (struct nlattr *)attr;
+		collector->ctx->entries[collector->ctx->count++] =
+			(struct nlattr *)attr;
 	}
 	return MNL_CB_OK;
 }
@@ -1318,8 +1384,10 @@ static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
-	struct multi_attr_ctx parent_dev_ctx = {0}, parent_pin_ctx = {0}, ref_sync_ctx = {0};
-	struct multi_attr_ctx freq_supp_ctx = {0}, esync_freq_supp_ctx = {0};
+	struct multi_attr_ctx parent_dev_ctx = { 0 }, parent_pin_ctx = { 0 },
+			      ref_sync_ctx = { 0 };
+	struct multi_attr_ctx freq_supp_ctx = { 0 },
+			      esync_freq_supp_ctx = { 0 };
 	struct multi_attr_collector collector;
 	unsigned int count;
 	int ret = MNL_CB_OK;
@@ -1344,7 +1412,8 @@ static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 	if (count > 0 && multi_attr_ctx_init(&freq_supp_ctx, count) < 0)
 		goto err_alloc;
 
-	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
+	count = multi_attr_count_get(nlh, genl,
+				     DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
 	if (count > 0 && multi_attr_ctx_init(&esync_freq_supp_ctx, count) < 0)
 		goto err_alloc;
 
@@ -1352,52 +1421,62 @@ static int cmd_pin_show_cb(const struct nlmsghdr *nlh, void *data)
 	if (parent_dev_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
 		collector.ctx = &parent_dev_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	if (parent_pin_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_PARENT_PIN;
 		collector.ctx = &parent_pin_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	if (ref_sync_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
 		collector.ctx = &ref_sync_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	if (freq_supp_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_FREQUENCY_SUPPORTED;
 		collector.ctx = &freq_supp_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	if (esync_freq_supp_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED;
 		collector.ctx = &esync_freq_supp_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	/* Replace tb entries with contexts */
-	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ?
-		(struct nlattr *)&parent_dev_ctx : NULL;
+	tb[DPLL_A_PIN_PARENT_DEVICE] =
+		parent_dev_ctx.count > 0 ? (struct nlattr *)&parent_dev_ctx :
+					   NULL;
 	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ?
-		(struct nlattr *)&parent_pin_ctx : NULL;
-	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ?
-		(struct nlattr *)&ref_sync_ctx : NULL;
-	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ?
-		(struct nlattr *)&freq_supp_ctx : NULL;
+					    (struct nlattr *)&parent_pin_ctx :
+					    NULL;
+	tb[DPLL_A_PIN_REFERENCE_SYNC] =
+		ref_sync_ctx.count > 0 ? (struct nlattr *)&ref_sync_ctx : NULL;
+	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] =
+		freq_supp_ctx.count > 0 ? (struct nlattr *)&freq_supp_ctx :
+					  NULL;
 	tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] =
 		esync_freq_supp_ctx.count > 0 ?
-		(struct nlattr *)&esync_freq_supp_ctx : NULL;
+			(struct nlattr *)&esync_freq_supp_ctx :
+			NULL;
 
 	dpll_pin_print_attrs(tb);
 
 	goto cleanup;
 
 err_alloc:
-	fprintf(stderr, "Failed to allocate memory for multi-attr collection\n");
+	fprintf(stderr,
+		"Failed to allocate memory for multi-attr collection\n");
 	ret = MNL_CB_ERROR;
 
 cleanup:
@@ -1416,8 +1495,10 @@ static int cmd_pin_show_dump_cb(const struct nlmsghdr *nlh, void *data)
 {
 	struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 	struct genlmsghdr *genl = mnl_nlmsg_get_payload(nlh);
-	struct multi_attr_ctx parent_dev_ctx = {0}, parent_pin_ctx = {0}, ref_sync_ctx = {0};
-	struct multi_attr_ctx freq_supp_ctx = {0}, esync_freq_supp_ctx = {0};
+	struct multi_attr_ctx parent_dev_ctx = { 0 }, parent_pin_ctx = { 0 },
+			      ref_sync_ctx = { 0 };
+	struct multi_attr_ctx freq_supp_ctx = { 0 },
+			      esync_freq_supp_ctx = { 0 };
 	struct multi_attr_collector collector;
 	unsigned int count;
 	int ret = MNL_CB_OK;
@@ -1442,7 +1523,8 @@ static int cmd_pin_show_dump_cb(const struct nlmsghdr *nlh, void *data)
 	if (count > 0 && multi_attr_ctx_init(&freq_supp_ctx, count) < 0)
 		goto err_alloc;
 
-	count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
+	count = multi_attr_count_get(nlh, genl,
+				     DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
 	if (count > 0 && multi_attr_ctx_init(&esync_freq_supp_ctx, count) < 0)
 		goto err_alloc;
 
@@ -1450,45 +1532,54 @@ static int cmd_pin_show_dump_cb(const struct nlmsghdr *nlh, void *data)
 	if (parent_dev_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
 		collector.ctx = &parent_dev_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	if (parent_pin_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_PARENT_PIN;
 		collector.ctx = &parent_pin_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	if (ref_sync_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
 		collector.ctx = &ref_sync_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	if (freq_supp_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_FREQUENCY_SUPPORTED;
 		collector.ctx = &freq_supp_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	if (esync_freq_supp_ctx.entries) {
 		collector.attr_type = DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED;
 		collector.ctx = &esync_freq_supp_ctx;
-		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+		mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb,
+			       &collector);
 	}
 
 	/* Replace tb entries with contexts */
-	tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ?
-		(struct nlattr *)&parent_dev_ctx : NULL;
+	tb[DPLL_A_PIN_PARENT_DEVICE] =
+		parent_dev_ctx.count > 0 ? (struct nlattr *)&parent_dev_ctx :
+					   NULL;
 	tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ?
-		(struct nlattr *)&parent_pin_ctx : NULL;
-	tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ?
-		(struct nlattr *)&ref_sync_ctx : NULL;
-	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ?
-		(struct nlattr *)&freq_supp_ctx : NULL;
+					    (struct nlattr *)&parent_pin_ctx :
+					    NULL;
+	tb[DPLL_A_PIN_REFERENCE_SYNC] =
+		ref_sync_ctx.count > 0 ? (struct nlattr *)&ref_sync_ctx : NULL;
+	tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] =
+		freq_supp_ctx.count > 0 ? (struct nlattr *)&freq_supp_ctx :
+					  NULL;
 	tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] =
 		esync_freq_supp_ctx.count > 0 ?
-		(struct nlattr *)&esync_freq_supp_ctx : NULL;
+			(struct nlattr *)&esync_freq_supp_ctx :
+			NULL;
 
 	open_json_object(NULL);
 	dpll_pin_print_attrs(tb);
@@ -1497,7 +1588,8 @@ static int cmd_pin_show_dump_cb(const struct nlmsghdr *nlh, void *data)
 	goto cleanup;
 
 err_alloc:
-	fprintf(stderr, "Failed to allocate memory for multi-attr collection\n");
+	fprintf(stderr,
+		"Failed to allocate memory for multi-attr collection\n");
 	ret = MNL_CB_ERROR;
 
 cleanup:
@@ -1517,7 +1609,7 @@ static int cmd_pin_show_id(struct dpll *dpll, __u32 id)
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_PIN_GET,
-					   NLM_F_REQUEST | NLM_F_ACK);
+					  NLM_F_REQUEST | NLM_F_ACK);
 	mnl_attr_put_u32(nlh, DPLL_A_PIN_ID, id);
 
 	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_show_cb, NULL);
@@ -1529,13 +1621,15 @@ static int cmd_pin_show_id(struct dpll *dpll, __u32 id)
 	return 0;
 }
 
-static int cmd_pin_show_dump(struct dpll *dpll, bool has_device_id, __u32 device_id)
+static int cmd_pin_show_dump(struct dpll *dpll, bool has_device_id,
+			     __u32 device_id)
 {
 	struct nlmsghdr *nlh;
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_PIN_GET,
-					   NLM_F_REQUEST | NLM_F_ACK | NLM_F_DUMP);
+					  NLM_F_REQUEST | NLM_F_ACK |
+						  NLM_F_DUMP);
 
 	/* If device_id specified, filter pins by device */
 	if (has_device_id)
@@ -1544,7 +1638,8 @@ static int cmd_pin_show_dump(struct dpll *dpll, bool has_device_id, __u32 device
 	/* Open JSON array for multiple pins */
 	open_json_array(PRINT_JSON, "pin");
 
-	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_show_dump_cb, NULL);
+	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_show_dump_cb,
+				     NULL);
 	if (err < 0) {
 		pr_err("Failed to dump pins\n");
 		close_json_array(PRINT_JSON, NULL);
@@ -1591,7 +1686,7 @@ static int cmd_pin_set(struct dpll *dpll)
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_PIN_SET,
-					   NLM_F_REQUEST | NLM_F_ACK);
+					  NLM_F_REQUEST | NLM_F_ACK);
 
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
@@ -1600,11 +1695,14 @@ static int cmd_pin_set(struct dpll *dpll)
 			mnl_attr_put_u32(nlh, DPLL_A_PIN_ID, id);
 			has_id = true;
 		} else if (dpll_argv_match(dpll, "frequency")) {
-			DPLL_PARSE_ATTR_U64(dpll, nlh, "frequency", DPLL_A_PIN_FREQUENCY);
+			DPLL_PARSE_ATTR_U64(dpll, nlh, "frequency",
+					    DPLL_A_PIN_FREQUENCY);
 		} else if (dpll_argv_match(dpll, "phase-adjust")) {
-			DPLL_PARSE_ATTR_S32(dpll, nlh, "phase-adjust", DPLL_A_PIN_PHASE_ADJUST);
+			DPLL_PARSE_ATTR_S32(dpll, nlh, "phase-adjust",
+					    DPLL_A_PIN_PHASE_ADJUST);
 		} else if (dpll_argv_match(dpll, "esync-frequency")) {
-			DPLL_PARSE_ATTR_U64(dpll, nlh, "esync-frequency", DPLL_A_PIN_ESYNC_FREQUENCY);
+			DPLL_PARSE_ATTR_U64(dpll, nlh, "esync-frequency",
+					    DPLL_A_PIN_ESYNC_FREQUENCY);
 		} else if (dpll_argv_match(dpll, "parent-device")) {
 			struct nlattr *nest;
 			__u32 parent_id;
@@ -1615,23 +1713,27 @@ static int cmd_pin_set(struct dpll *dpll)
 
 			/* Parse parent device id */
 			if (get_u32(&parent_id, dpll_argv(dpll), 0)) {
-				pr_err("invalid parent-device id: %s\n", dpll_argv(dpll));
+				pr_err("invalid parent-device id: %s\n",
+				       dpll_argv(dpll));
 				return -EINVAL;
 			}
 			dpll_arg_inc(dpll);
 
 			/* Create nested attribute for parent device */
-			nest = mnl_attr_nest_start(nlh, DPLL_A_PIN_PARENT_DEVICE);
+			nest = mnl_attr_nest_start(nlh,
+						   DPLL_A_PIN_PARENT_DEVICE);
 			mnl_attr_put_u32(nlh, DPLL_A_PIN_PARENT_ID, parent_id);
 
 			/* Parse optional parent-device attributes */
 			while (dpll_argc(dpll) > 0) {
 				if (dpll_argv_match(dpll, "direction")) {
-					DPLL_PARSE_ATTR_ENUM(dpll, nlh, "direction",
-							     DPLL_A_PIN_DIRECTION,
-							     dpll_parse_direction);
+					DPLL_PARSE_ATTR_ENUM(
+						dpll, nlh, "direction",
+						DPLL_A_PIN_DIRECTION,
+						dpll_parse_direction);
 				} else if (dpll_argv_match(dpll, "prio")) {
-					DPLL_PARSE_ATTR_U32(dpll, nlh, "prio", DPLL_A_PIN_PRIO);
+					DPLL_PARSE_ATTR_U32(dpll, nlh, "prio",
+							    DPLL_A_PIN_PRIO);
 				} else if (dpll_argv_match(dpll, "state")) {
 					DPLL_PARSE_ATTR_ENUM(dpll, nlh, "state",
 							     DPLL_A_PIN_STATE,
@@ -1653,7 +1755,8 @@ static int cmd_pin_set(struct dpll *dpll)
 
 			/* Parse parent pin id */
 			if (get_u32(&parent_id, dpll_argv(dpll), 0)) {
-				pr_err("invalid parent-pin id: %s\n", dpll_argv(dpll));
+				pr_err("invalid parent-pin id: %s\n",
+				       dpll_argv(dpll));
 				return -EINVAL;
 			}
 			dpll_arg_inc(dpll);
@@ -1663,7 +1766,8 @@ static int cmd_pin_set(struct dpll *dpll)
 			mnl_attr_put_u32(nlh, DPLL_A_PIN_PARENT_ID, parent_id);
 
 			/* Parse optional parent-pin state */
-			if (dpll_argc(dpll) > 0 && dpll_argv_match(dpll, "state")) {
+			if (dpll_argc(dpll) > 0 &&
+			    dpll_argv_match(dpll, "state")) {
 				DPLL_PARSE_ATTR_ENUM(dpll, nlh, "state",
 						     DPLL_A_PIN_STATE,
 						     dpll_parse_state);
@@ -1680,17 +1784,20 @@ static int cmd_pin_set(struct dpll *dpll)
 
 			/* Parse reference-sync pin id */
 			if (get_u32(&ref_pin_id, dpll_argv(dpll), 0)) {
-				pr_err("invalid reference-sync pin id: %s\n", dpll_argv(dpll));
+				pr_err("invalid reference-sync pin id: %s\n",
+				       dpll_argv(dpll));
 				return -EINVAL;
 			}
 			dpll_arg_inc(dpll);
 
 			/* Create nested attribute for reference-sync */
-			nest = mnl_attr_nest_start(nlh, DPLL_A_PIN_REFERENCE_SYNC);
+			nest = mnl_attr_nest_start(nlh,
+						   DPLL_A_PIN_REFERENCE_SYNC);
 			mnl_attr_put_u32(nlh, DPLL_A_PIN_ID, ref_pin_id);
 
 			/* Parse optional reference-sync state */
-			if (dpll_argc(dpll) > 0 && dpll_argv_match(dpll, "state")) {
+			if (dpll_argc(dpll) > 0 &&
+			    dpll_argv_match(dpll, "state")) {
 				DPLL_PARSE_ATTR_ENUM(dpll, nlh, "state",
 						     DPLL_A_PIN_STATE,
 						     dpll_parse_state);
@@ -1746,35 +1853,45 @@ static int cmd_pin_id_get(struct dpll *dpll)
 	int err;
 
 	nlh = mnlu_gen_socket_cmd_prepare(&dpll->nlg, DPLL_CMD_PIN_ID_GET,
-					   NLM_F_REQUEST | NLM_F_ACK);
+					  NLM_F_REQUEST | NLM_F_ACK);
 
 	/* Parse arguments */
 	while (dpll_argc(dpll) > 0) {
 		if (dpll_argv_match(dpll, "module-name")) {
-			DPLL_PARSE_ATTR_STR(dpll, nlh, "module-name", DPLL_A_PIN_MODULE_NAME);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "module-name",
+					    DPLL_A_PIN_MODULE_NAME);
 		} else if (dpll_argv_match(dpll, "clock-id")) {
-			DPLL_PARSE_ATTR_U64(dpll, nlh, "clock-id", DPLL_A_PIN_CLOCK_ID);
+			DPLL_PARSE_ATTR_U64(dpll, nlh, "clock-id",
+					    DPLL_A_PIN_CLOCK_ID);
 		} else if (dpll_argv_match(dpll, "board-label")) {
-			DPLL_PARSE_ATTR_STR(dpll, nlh, "board-label", DPLL_A_PIN_BOARD_LABEL);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "board-label",
+					    DPLL_A_PIN_BOARD_LABEL);
 		} else if (dpll_argv_match(dpll, "panel-label")) {
-			DPLL_PARSE_ATTR_STR(dpll, nlh, "panel-label", DPLL_A_PIN_PANEL_LABEL);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "panel-label",
+					    DPLL_A_PIN_PANEL_LABEL);
 		} else if (dpll_argv_match(dpll, "package-label")) {
-			DPLL_PARSE_ATTR_STR(dpll, nlh, "package-label", DPLL_A_PIN_PACKAGE_LABEL);
+			DPLL_PARSE_ATTR_STR(dpll, nlh, "package-label",
+					    DPLL_A_PIN_PACKAGE_LABEL);
 		} else if (dpll_argv_match(dpll, "type")) {
 			dpll_arg_inc(dpll);
 			if (dpll_arg_required(dpll, "type"))
 				return -EINVAL;
 			/* Parse pin type */
 			if (dpll_argv_match(dpll, "mux")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE, DPLL_PIN_TYPE_MUX);
+				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE,
+						 DPLL_PIN_TYPE_MUX);
 			} else if (dpll_argv_match(dpll, "ext")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE, DPLL_PIN_TYPE_EXT);
+				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE,
+						 DPLL_PIN_TYPE_EXT);
 			} else if (dpll_argv_match(dpll, "synce-eth-port")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE, DPLL_PIN_TYPE_SYNCE_ETH_PORT);
+				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE,
+						 DPLL_PIN_TYPE_SYNCE_ETH_PORT);
 			} else if (dpll_argv_match(dpll, "int-oscillator")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE, DPLL_PIN_TYPE_INT_OSCILLATOR);
+				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE,
+						 DPLL_PIN_TYPE_INT_OSCILLATOR);
 			} else if (dpll_argv_match(dpll, "gnss")) {
-				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE, DPLL_PIN_TYPE_GNSS);
+				mnl_attr_put_u32(nlh, DPLL_A_PIN_TYPE,
+						 DPLL_PIN_TYPE_GNSS);
 			} else {
 				pr_err("invalid type: %s\n", dpll_argv(dpll));
 				return -EINVAL;
@@ -1786,7 +1903,8 @@ static int cmd_pin_id_get(struct dpll *dpll)
 		}
 	}
 
-	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_id_get_cb, &found);
+	err = mnlu_gen_socket_sndrcv(&dpll->nlg, nlh, cmd_pin_id_get_cb,
+				     &found);
 	if (err < 0) {
 		pr_err("Failed to get pin id\n");
 		return -1;
@@ -1813,7 +1931,8 @@ static int cmd_pin(struct dpll *dpll)
 		return cmd_pin_id_get(dpll);
 	}
 
-	pr_err("Command \"%s\" not found\n", dpll_argv(dpll) ? dpll_argv(dpll) : "");
+	pr_err("Command \"%s\" not found\n",
+	       dpll_argv(dpll) ? dpll_argv(dpll) : "");
 	return -ENOENT;
 }
 
@@ -1852,93 +1971,115 @@ static int cmd_monitor_cb(const struct nlmsghdr *nlh, void *data)
 			cmd_name = "PIN_DELETE";
 
 		/* Multi-attr contexts for pin notifications */
-		struct multi_attr_ctx parent_dev_ctx = {0};
-		struct multi_attr_ctx parent_pin_ctx = {0};
-		struct multi_attr_ctx ref_sync_ctx = {0};
-		struct multi_attr_ctx freq_supp_ctx = {0};
-		struct multi_attr_ctx esync_freq_supp_ctx = {0};
-		struct multi_attr_collector collector = {0};
+		struct multi_attr_ctx parent_dev_ctx = { 0 };
+		struct multi_attr_ctx parent_pin_ctx = { 0 };
+		struct multi_attr_ctx ref_sync_ctx = { 0 };
+		struct multi_attr_ctx freq_supp_ctx = { 0 };
+		struct multi_attr_ctx esync_freq_supp_ctx = { 0 };
+		struct multi_attr_collector collector = { 0 };
 		struct nlattr *tb[DPLL_A_PIN_MAX + 1] = {};
 		int count;
 		int ret = MNL_CB_OK;
 
 		/* Pass 1: Count multi-attr occurrences and allocate */
-		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_DEVICE);
-		if (count > 0 && multi_attr_ctx_init(&parent_dev_ctx, count) < 0)
+		count = multi_attr_count_get(nlh, genl,
+					     DPLL_A_PIN_PARENT_DEVICE);
+		if (count > 0 &&
+		    multi_attr_ctx_init(&parent_dev_ctx, count) < 0)
 			goto pin_ntf_err;
 
 		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_PARENT_PIN);
-		if (count > 0 && multi_attr_ctx_init(&parent_pin_ctx, count) < 0)
+		if (count > 0 &&
+		    multi_attr_ctx_init(&parent_pin_ctx, count) < 0)
 			goto pin_ntf_err;
 
-		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_REFERENCE_SYNC);
+		count = multi_attr_count_get(nlh, genl,
+					     DPLL_A_PIN_REFERENCE_SYNC);
 		if (count > 0 && multi_attr_ctx_init(&ref_sync_ctx, count) < 0)
 			goto pin_ntf_err;
 
-		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_FREQUENCY_SUPPORTED);
+		count = multi_attr_count_get(nlh, genl,
+					     DPLL_A_PIN_FREQUENCY_SUPPORTED);
 		if (count > 0 && multi_attr_ctx_init(&freq_supp_ctx, count) < 0)
 			goto pin_ntf_err;
 
-		count = multi_attr_count_get(nlh, genl, DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
-		if (count > 0 && multi_attr_ctx_init(&esync_freq_supp_ctx, count) < 0)
+		count = multi_attr_count_get(
+			nlh, genl, DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED);
+		if (count > 0 &&
+		    multi_attr_ctx_init(&esync_freq_supp_ctx, count) < 0)
 			goto pin_ntf_err;
 
 		/* Pass 2: Collect multi-attr entries */
 		if (parent_dev_ctx.entries) {
 			collector.attr_type = DPLL_A_PIN_PARENT_DEVICE;
 			collector.ctx = &parent_dev_ctx;
-			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+			mnl_attr_parse(nlh, sizeof(*genl),
+				       collect_multi_attr_cb, &collector);
 		}
 
 		if (parent_pin_ctx.entries) {
 			collector.attr_type = DPLL_A_PIN_PARENT_PIN;
 			collector.ctx = &parent_pin_ctx;
-			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+			mnl_attr_parse(nlh, sizeof(*genl),
+				       collect_multi_attr_cb, &collector);
 		}
 
 		if (ref_sync_ctx.entries) {
 			collector.attr_type = DPLL_A_PIN_REFERENCE_SYNC;
 			collector.ctx = &ref_sync_ctx;
-			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+			mnl_attr_parse(nlh, sizeof(*genl),
+				       collect_multi_attr_cb, &collector);
 		}
 
 		if (freq_supp_ctx.entries) {
 			collector.attr_type = DPLL_A_PIN_FREQUENCY_SUPPORTED;
 			collector.ctx = &freq_supp_ctx;
-			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+			mnl_attr_parse(nlh, sizeof(*genl),
+				       collect_multi_attr_cb, &collector);
 		}
 
 		if (esync_freq_supp_ctx.entries) {
-			collector.attr_type = DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED;
+			collector.attr_type =
+				DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED;
 			collector.ctx = &esync_freq_supp_ctx;
-			mnl_attr_parse(nlh, sizeof(*genl), collect_multi_attr_cb, &collector);
+			mnl_attr_parse(nlh, sizeof(*genl),
+				       collect_multi_attr_cb, &collector);
 		}
 
 		/* Pass 3: Parse remaining single attributes */
 		mnl_attr_parse(nlh, sizeof(*genl), attr_pin_cb, tb);
 
 		/* Replace tb entries with contexts */
-		tb[DPLL_A_PIN_PARENT_DEVICE] = parent_dev_ctx.count > 0 ?
-			(struct nlattr *)&parent_dev_ctx : NULL;
-		tb[DPLL_A_PIN_PARENT_PIN] = parent_pin_ctx.count > 0 ?
-			(struct nlattr *)&parent_pin_ctx : NULL;
-		tb[DPLL_A_PIN_REFERENCE_SYNC] = ref_sync_ctx.count > 0 ?
-			(struct nlattr *)&ref_sync_ctx : NULL;
-		tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] = freq_supp_ctx.count > 0 ?
-			(struct nlattr *)&freq_supp_ctx : NULL;
+		tb[DPLL_A_PIN_PARENT_DEVICE] =
+			parent_dev_ctx.count > 0 ?
+				(struct nlattr *)&parent_dev_ctx :
+				NULL;
+		tb[DPLL_A_PIN_PARENT_PIN] =
+			parent_pin_ctx.count > 0 ?
+				(struct nlattr *)&parent_pin_ctx :
+				NULL;
+		tb[DPLL_A_PIN_REFERENCE_SYNC] =
+			ref_sync_ctx.count > 0 ?
+				(struct nlattr *)&ref_sync_ctx :
+				NULL;
+		tb[DPLL_A_PIN_FREQUENCY_SUPPORTED] =
+			freq_supp_ctx.count > 0 ?
+				(struct nlattr *)&freq_supp_ctx :
+				NULL;
 		tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED] =
 			esync_freq_supp_ctx.count > 0 ?
-			(struct nlattr *)&esync_freq_supp_ctx : NULL;
+				(struct nlattr *)&esync_freq_supp_ctx :
+				NULL;
 
 		pr_out("[%s] ", cmd_name);
 		dpll_pin_print_attrs(tb);
 		goto pin_ntf_cleanup;
 
-pin_ntf_err:
+	pin_ntf_err:
 		pr_err("Failed to allocate memory for multi-attr processing\n");
 		ret = MNL_CB_ERROR;
 
-pin_ntf_cleanup:
+	pin_ntf_cleanup:
 		/* Free allocated memory */
 		multi_attr_ctx_free(&parent_dev_ctx);
 		multi_attr_ctx_free(&parent_pin_ctx);
@@ -1968,7 +2109,8 @@ static int cmd_monitor(struct dpll *dpll)
 	/* Subscribe to monitor multicast group */
 	ret = mnlg_socket_group_add(&dpll->nlg, "monitor");
 	if (ret) {
-		pr_err("Failed to subscribe to monitor group: %s\n", strerror(errno));
+		pr_err("Failed to subscribe to monitor group: %s\n",
+		       strerror(errno));
 		return ret;
 	}
 
@@ -2013,12 +2155,14 @@ static int cmd_monitor(struct dpll *dpll)
 			continue; /* Timeout, check monitor_running flag */
 
 		/* Data available, receive and process */
-		ret = mnlu_gen_socket_recv_run(&dpll->nlg, cmd_monitor_cb, NULL);
+		ret = mnlu_gen_socket_recv_run(&dpll->nlg, cmd_monitor_cb,
+					       NULL);
 		if (ret < 0) {
 			/* Only print error if we're still supposed to be running.
 			 * If monitor_running is false, we're shutting down gracefully. */
 			if (monitor_running)
-				pr_err("Failed to receive notifications: %s\n", strerror(errno));
+				pr_err("Failed to receive notifications: %s\n",
+				       strerror(errno));
 			break;
 		}
 	}
