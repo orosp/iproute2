@@ -3937,8 +3937,10 @@ test_pretty_json() {
 
 		# Check if both are valid JSON
 		if jq empty "$json_file" 2>/dev/null && jq empty "$plain_json_file" 2>/dev/null; then
-			# Check if they're semantically equal
-			if [ "$(jq -S . "$json_file")" == "$(jq -S . "$plain_json_file")" ]; then
+			# Check if they're semantically equal (ignoring dynamic values)
+			# Remove temp, phase-offset, fractional-frequency-offset which change over time
+			local jq_normalize='walk(if type == "object" then del(.temp) | del(.["phase-offset"]) | del(.["fractional-frequency-offset"]) else . end)'
+			if [ "$(jq -S "$jq_normalize" "$json_file")" == "$(jq -S "$jq_normalize" "$plain_json_file")" ]; then
 				print_result PASS "Pretty and plain JSON are equivalent"
 			else
 				print_result FAIL "Pretty and plain JSON differ in content"
