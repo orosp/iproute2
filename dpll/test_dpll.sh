@@ -3622,7 +3622,6 @@ test_s64_sint_values() {
 			else
 				# fractional-frequency-offset changes continuously - this is not a failure
 				print_result WARN "$test_name (mismatch: dpll=$ffo_dpll, python=$ffo_python)"
-				echo "  ${DIM}Note: fractional-frequency-offset changes continuously between calls${NC}"
 			fi
 		fi
 	else
@@ -3663,7 +3662,6 @@ test_s64_sint_values() {
 						else
 							# phase-offset changes continuously - this is not a failure
 							print_result WARN "$test_name (mismatch: dpll=$phase_offset_dpll, python=$phase_offset_python)"
-							echo "  ${DIM}Note: phase-offset changes continuously between calls${NC}"
 						fi
 					fi
 					break 2  # Break both loops
