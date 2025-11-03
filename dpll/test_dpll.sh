@@ -3310,6 +3310,10 @@ test_monitor_python_parity() {
 
 	echo -e "  ${DIM}Both monitors started (C PID: $c_pid, Python PID: $py_pid)${NC}"
 
+	# Give monitors additional time to fully subscribe to netlink events
+	# This reduces timing differences in event capture between C and Python monitors
+	sleep 2
+
 	# Perform frequency change (only supported test attribute)
 	echo -e "  ${DIM}Changing frequency: $freq -> $alt_freq -> $freq${NC}"
 	./dpll pin set id "$pin_id" frequency "$alt_freq" 2>/dev/null || true
