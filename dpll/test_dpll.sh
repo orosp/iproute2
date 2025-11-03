@@ -2250,7 +2250,7 @@ test_device_lock_status() {
 				;;
 		esac
 	else
-		print_result SKIP "Device $device_id lock-status-error (attribute not present)"
+		print_result SKIP "Device $device_id lock-status-error (not present - device has no error)"
 	fi
 
 	# Test 3: Compare with Python CLI
