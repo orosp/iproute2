@@ -2236,6 +2236,9 @@ test_device_lock_status() {
 	fi
 
 	# Test 2: Read lock-status-error
+	# Note: lock-status-error is only sent by kernel when:
+	#   - status is unlocked or holdover AND
+	#   - there is an actual error (status_error != 0)
 	if dpll_device_has_attr "$device_id" "lock-status-error"; then
 		local lock_error=$(dpll_get_device_attr "$device_id" "lock-status-error")
 		print_result PASS "Device $device_id lock-status-error: $lock_error"
@@ -2250,7 +2253,14 @@ test_device_lock_status() {
 				;;
 		esac
 	else
-		print_result SKIP "Device $device_id lock-status-error (not present - device has no error)"
+		# lock-status-error not present - check if this is expected
+		if [ "$lock_status" = "unlocked" ] || [ "$lock_status" = "holdover" ]; then
+			# Device is in error state but lock-status-error is missing - this is OK if no error
+			print_result PASS "Device $device_id lock-status-error not present (device in $lock_status but no error)"
+		else
+			# Device is locked/locked-ho-acq - lock-status-error should not be present
+			print_result PASS "Device $device_id lock-status-error not present (device $lock_status, no error expected)"
+		fi
 	fi
 
 	# Test 3: Compare with Python CLI
