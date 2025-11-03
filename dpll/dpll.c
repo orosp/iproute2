@@ -1136,7 +1136,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		     "fractional-frequency-offset");
 
 	/* Print esync frequency and related attributes */
-	DPLL_PR_U64_FMT(tb, DPLL_A_PIN_ESYNC_FREQUENCY, "esync_frequency",
+	DPLL_PR_U64_FMT(tb, DPLL_A_PIN_ESYNC_FREQUENCY, "esync-frequency",
 			"  esync-frequency: %llu Hz\n");
 
 	if (tb[DPLL_A_PIN_ESYNC_FREQUENCY_SUPPORTED]) {
@@ -1195,7 +1195,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 		close_json_array(PRINT_JSON, NULL);
 	}
 
-	DPLL_PR_UINT_FMT(tb, DPLL_A_PIN_ESYNC_PULSE, "esync_pulse",
+	DPLL_PR_UINT_FMT(tb, DPLL_A_PIN_ESYNC_PULSE, "esync-pulse",
 			 "  esync-pulse: %u\n");
 
 	/* Print parent-device relationships */
