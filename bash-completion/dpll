@@ -74,7 +74,7 @@ _dpll_device()
                     return 0
                     ;;
                 phase-offset-monitor)
-                    COMPREPLY=( $( compgen -W "true false 0 1" -- "$cur" ) )
+                    COMPREPLY=( $( compgen -W "enable disable true false 0 1" -- "$cur" ) )
                     return 0
                     ;;
                 phase-offset-avg-factor)

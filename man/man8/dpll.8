@@ -93,7 +93,7 @@ Temperature (if supported)
 Type (PPS or EEC)
 .RE
 
-.SS dpll device set id ID [ phase-offset-monitor { true | false } ] [ phase-offset-avg-factor FACTOR ]
+.SS dpll device set id ID [ phase-offset-monitor { enable | disable } ] [ phase-offset-avg-factor FACTOR ]
 
 Configure DPLL device parameters.
 
@@ -102,7 +102,7 @@ Configure DPLL device parameters.
 Specifies which device to configure (required).
 
 .TP
-.BI phase-offset-monitor " { true | false }"
+.BI phase-offset-monitor " { enable | disable | true | false | 0 | 1 }"
 Enable or disable phase offset monitoring between the device and its pins.
 When enabled, the kernel continuously measures and reports phase differences.
 
@@ -290,7 +290,7 @@ Press Ctrl+C to stop monitoring.
 
 .SS Enable phase offset monitoring on device 0
 .nf
-.B dpll device set id 0 phase-offset-monitor true
+.B dpll device set id 0 phase-offset-monitor enable
 .fi
 
 .SS Show all pins

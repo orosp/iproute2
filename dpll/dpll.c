@@ -537,7 +537,7 @@ dpll_free:
 static void cmd_device_help(void)
 {
 	pr_err("Usage: dpll device show [ id DEVICE_ID ]\n");
-	pr_err("       dpll device set id DEVICE_ID [ phase-offset-monitor BOOL ]\n");
+	pr_err("       dpll device set id DEVICE_ID [ phase-offset-monitor { enable | disable } ]\n");
 	pr_err("                                      [ phase-offset-avg-factor NUM ]\n");
 	pr_err("       dpll device id-get [ module-name NAME ] [ clock-id ID ] [ type TYPE ]\n");
 }
@@ -788,6 +788,22 @@ static int cmd_device_show(struct dpll *dpll)
 		return cmd_device_show_dump(dpll);
 }
 
+static int strtobool(const char *str, bool *p_val)
+{
+	bool val;
+
+	if (!strcmp(str, "true") || !strcmp(str, "1") ||
+	    !strcmp(str, "enable"))
+		val = true;
+	else if (!strcmp(str, "false") || !strcmp(str, "0") ||
+		 !strcmp(str, "disable"))
+		val = false;
+	else
+		return -EINVAL;
+	*p_val = val;
+	return 0;
+}
+
 static int cmd_device_set(struct dpll *dpll)
 {
 	struct nlmsghdr *nlh;
@@ -806,23 +822,19 @@ static int cmd_device_set(struct dpll *dpll)
 			has_id = true;
 		} else if (dpll_argv_match(dpll, "phase-offset-monitor")) {
 			char *str = dpll_argv_next(dpll);
+			bool val;
 
 			if (!str) {
 				pr_err("phase-offset-monitor requires an argument\n");
 				return -EINVAL;
 			}
-			if (strcmp(str, "true") == 0 || strcmp(str, "1") == 0) {
-				mnl_attr_put_u32(
-					nlh, DPLL_A_PHASE_OFFSET_MONITOR, 1);
-			} else if (strcmp(str, "false") == 0 ||
-				   strcmp(str, "0") == 0) {
-				mnl_attr_put_u32(
-					nlh, DPLL_A_PHASE_OFFSET_MONITOR, 0);
-			} else {
-				pr_err("invalid phase-offset-monitor value: %s (use true/false)\n",
+			if (strtobool(str, &val)) {
+				pr_err("invalid phase-offset-monitor value: %s (use enable/disable)\n",
 				       str);
 				return -EINVAL;
 			}
+			mnl_attr_put_u32(nlh, DPLL_A_PHASE_OFFSET_MONITOR,
+					 val ? 1 : 0);
 		} else if (dpll_argv_match(dpll, "phase-offset-avg-factor")) {
 			DPLL_PARSE_ATTR_U32(dpll, nlh,
 					    "phase-offset-avg-factor",
