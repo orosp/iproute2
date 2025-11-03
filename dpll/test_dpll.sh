@@ -90,8 +90,8 @@ fi
 
 # Paths
 DPLL_TOOL_BIN="./dpll"
-PYTHON_CLI="/root/net-next/tools/net/ynl/pyynl/cli.py"
-DPLL_SPEC="/root/net-next/Documentation/netlink/specs/dpll.yaml"
+PYTHON_CLI="/home/poros/git/net-next/tools/net/ynl/pyynl/cli.py"
+DPLL_SPEC="/home/poros/git/net-next/Documentation/netlink/specs/dpll.yaml"
 TEST_DIR="/tmp/dpll_test_$$"
 ERROR_LOG="$TEST_DIR/all_errors.log"
 COMMAND_LOG="$TEST_DIR/commands.log"
@@ -1081,7 +1081,7 @@ check_prerequisites() {
 #!/bin/bash
 COMMAND_LOG="$(dirname "$0")/commands.log"
 ERROR_LOG_FILE="$(dirname "$0")/all_errors.log"
-PYTHON_CLI_ORIG="/root/net-next/tools/net/ynl/pyynl/cli.py"
+PYTHON_CLI_ORIG="/home/poros/git/net-next/tools/net/ynl/pyynl/cli.py"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S.%3N')
 
 # Log command with timestamp

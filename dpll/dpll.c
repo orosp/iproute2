@@ -310,6 +310,22 @@ static inline __s64 mnl_attr_get_sint(const struct nlattr *attr)
 #define DPLL_PR_STR(tb, attr_id, name)                                         \
 	DPLL_PR_STR_FMT(tb, attr_id, name, "  " name ": %s\n")
 
+/* Temperature macro - JSON prints raw millidegrees, human prints formatted */
+#define DPLL_PR_TEMP(tb, attr_id)                                              \
+	do {                                                                   \
+		if (tb[attr_id]) {                                             \
+			__s32 temp = mnl_attr_get_u32(tb[attr_id]);            \
+			if (is_json_context()) {                               \
+				print_int(PRINT_JSON, "temp", NULL, temp);     \
+			} else {                                               \
+				int temp_int = temp / 1000;                    \
+				int temp_frac = abs(temp % 1000);              \
+				pr_out("  temp: %d.%03d C\n",                  \
+				       temp_int, temp_frac);                   \
+			}                                                      \
+		}                                                              \
+	} while (0)
+
 /* Macros for printing enum values converted to strings via name function */
 
 /* Generic version with custom format */
@@ -663,18 +679,7 @@ static void dpll_device_print_attrs(const struct nlmsghdr *nlh,
 			       "clock-quality-level",
 			       dpll_clock_quality_level_name);
 
-	if (tb[DPLL_A_TEMP]) {
-		__s32 temp = mnl_attr_get_u32(tb[DPLL_A_TEMP]);
-		if (is_json_context()) {
-			print_float(PRINT_JSON, "temperature", NULL,
-				    temp / 1000.0);
-		} else {
-			int temp_int = temp / 1000;
-			int temp_frac = abs(temp % 1000);
-			pr_out("  temperature: %d.%03d C\n", temp_int,
-			       temp_frac);
-		}
-	}
+	DPLL_PR_TEMP(tb, DPLL_A_TEMP);
 
 	DPLL_PR_MULTI_ENUM_STR(nlh, DPLL_A_MODE_SUPPORTED, "mode-supported",
 			       dpll_mode_name);
