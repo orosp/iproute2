@@ -2331,9 +2331,9 @@ test_phase_offset_monitoring() {
 		local monitor_state=$(dpll_get_device_attr "$device_with_monitor" "phase-offset-monitor")
 		print_result PASS "Device $device_with_monitor phase-offset-monitor: $monitor_state"
 
-		# Validate monitor state is valid enum
+		# Validate monitor state is valid enum (disable/enable per YAML spec)
 		case "$monitor_state" in
-			disabled|enabled)
+			disable|enable)
 				print_result PASS "Device $device_with_monitor phase-offset-monitor has valid value"
 				;;
 			*)
@@ -2343,15 +2343,15 @@ test_phase_offset_monitoring() {
 
 		# Test SET operations if enabled
 		if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
-			if dpll_device_set_and_verify "$device_with_monitor" "phase-offset-monitor" "enabled"; then
-				print_result PASS "Device $device_with_monitor set phase-offset-monitor to enabled"
+			if dpll_device_set_and_verify "$device_with_monitor" "phase-offset-monitor" "enable"; then
+				print_result PASS "Device $device_with_monitor set phase-offset-monitor to enable"
 			else
 				print_result SKIP "Device $device_with_monitor phase-offset-monitor SET (not supported)"
 			fi
 
 			# Try to set back to original state
-			if [ "$monitor_state" = "disabled" ]; then
-				dpll_device_set "$device_with_monitor" "phase-offset-monitor" "disabled" >> "$ERROR_LOG" 2>&1
+			if [ "$monitor_state" = "disable" ]; then
+				dpll_device_set "$device_with_monitor" "phase-offset-monitor" "disable" >> "$ERROR_LOG" 2>&1
 			fi
 		fi
 	else
