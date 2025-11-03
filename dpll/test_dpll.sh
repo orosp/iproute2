@@ -3966,10 +3966,19 @@ test_pretty_json() {
 			# Check if they're semantically equal (ignoring dynamic values)
 			# Remove temp, phase-offset, fractional-frequency-offset which change over time
 			local jq_normalize='walk(if type == "object" then del(.temp) | del(.["phase-offset"]) | del(.["fractional-frequency-offset"]) else . end)'
-			if [ "$(jq -S "$jq_normalize" "$json_file")" == "$(jq -S "$jq_normalize" "$plain_json_file")" ]; then
+			local pretty_norm=$(jq -S "$jq_normalize" "$json_file")
+			local plain_norm=$(jq -S "$jq_normalize" "$plain_json_file")
+			if [ "$pretty_norm" == "$plain_norm" ]; then
 				print_result PASS "Pretty and plain JSON are equivalent"
 			else
 				print_result FAIL "Pretty and plain JSON differ in content"
+				# Debug: show the difference
+				echo "  ${DIM}Pretty (normalized):${NC}" | head -3
+				echo "$pretty_norm" | head -5
+				echo "  ${DIM}Plain (normalized):${NC}" | head -3
+				echo "$plain_norm" | head -5
+				echo "  ${DIM}Diff:${NC}"
+				diff <(echo "$pretty_norm") <(echo "$plain_norm") | head -10 || true
 			fi
 		fi
 	else
