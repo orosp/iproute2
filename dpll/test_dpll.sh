@@ -385,6 +385,10 @@ print_result() {
 			echo -e "  ${YELLOW}${SKIP_MARK}${NC} ${YELLOW}SKIP${NC} ${DIM}│${NC} ${DIM}$test_name${NC}"
 			SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
 			;;
+		WARN)
+			echo -e "  ${YELLOW}${BOLD}⚠${NC} ${YELLOW}WARN${NC} ${DIM}│${NC} $test_name"
+			# WARN doesn't count as failure, but we track it
+			;;
 	esac
 }
 
@@ -2280,6 +2284,7 @@ test_device_temperature() {
 	fi
 
 	# Test 2: Compare with Python CLI
+	# Note: Temperature changes over time, so mismatch is expected and only a warning
 	if [ -n "$PYTHON_CLI" ]; then
 		local python_output="$TEST_DIR/python_device_${device_id}_temp.json"
 		"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
@@ -2289,7 +2294,9 @@ test_device_temperature() {
 			if [ "$temp" = "$temp_python" ]; then
 				print_result PASS "Device $device_id temp matches Python CLI"
 			else
-				print_result FAIL "Device $device_id temp mismatch (dpll=$temp, python=$temp_python)"
+				# Temperature can change between calls - this is not a failure
+				local diff=$((temp - temp_python))
+				print_result WARN "Device $device_id temp differs by ${diff} millidegrees (dpll=$temp, python=$temp_python)"
 			fi
 		fi
 	fi
