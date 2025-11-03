@@ -2265,7 +2265,9 @@ test_device_lock_status() {
 
 	# Test 3: Compare with Python CLI
 	if [ -n "$PYTHON_CLI" ]; then
+		local dpll_output="$TEST_DIR/dpll_device_${device_id}_lock.json"
 		local python_output="$TEST_DIR/python_device_${device_id}_lock.json"
+		$DPLL_TOOL device show id "$device_id" -j > "$dpll_output" 2>&1 || true
 		"$PYTHON_CLI" --spec "$DPLL_SPEC" --do device-get --json "{\"id\": $device_id}" --output-json > "$python_output" 2>&1 || true
 
 		if ! dpll_python_has_error "$python_output"; then
@@ -2274,6 +2276,10 @@ test_device_lock_status() {
 				print_result PASS "Device $device_id lock-status matches Python CLI"
 			else
 				print_result FAIL "Device $device_id lock-status mismatch (dpll=$lock_status, python=$lock_status_python)"
+				echo "  DPLL output: $dpll_output"
+				echo "  Python output: $python_output"
+				echo "  Diff:"
+				diff -u <(jq -S . "$dpll_output" 2>/dev/null || echo "{}") <(jq -S . "$python_output" 2>/dev/null || echo "{}") || true
 			fi
 		fi
 	fi
@@ -2674,7 +2680,9 @@ test_pin_type_validation() {
 	if [ -n "$PYTHON_CLI" ]; then
 		local pin_id=$(dpll_find_pin --with-attr "type")
 		if [ -n "$pin_id" ]; then
+			local dpll_output="$TEST_DIR/dpll_pin_${pin_id}_type.json"
 			local python_output="$TEST_DIR/python_pin_${pin_id}_type.json"
+			$DPLL_TOOL pin show id "$pin_id" -j > "$dpll_output" 2>&1 || true
 			"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_id}" --output-json > "$python_output" 2>&1 || true
 
 			if ! dpll_python_has_error "$python_output"; then
@@ -2685,6 +2693,10 @@ test_pin_type_validation() {
 					print_result PASS "Pin $pin_id type matches Python CLI"
 				else
 					print_result FAIL "Pin $pin_id type mismatch (dpll=$type_dpll, python=$type_python)"
+					echo "  DPLL output: $dpll_output"
+					echo "  Python output: $python_output"
+					echo "  Diff:"
+					diff -u <(jq -S . "$dpll_output" 2>/dev/null || echo "{}") <(jq -S . "$python_output" 2>/dev/null || echo "{}") || true
 				fi
 			fi
 		fi
@@ -3972,13 +3984,10 @@ test_pretty_json() {
 				print_result PASS "Pretty and plain JSON are equivalent"
 			else
 				print_result FAIL "Pretty and plain JSON differ in content"
-				# Debug: show the difference
-				echo "  ${DIM}Pretty (normalized):${NC}" | head -3
-				echo "$pretty_norm" | head -5
-				echo "  ${DIM}Plain (normalized):${NC}" | head -3
-				echo "$plain_norm" | head -5
-				echo "  ${DIM}Diff:${NC}"
-				diff <(echo "$pretty_norm") <(echo "$plain_norm") | head -10 || true
+				echo "  Pretty output: $json_file"
+				echo "  Plain output: $plain_json_file"
+				echo "  Diff:"
+				diff -u <(echo "$pretty_norm") <(echo "$plain_norm") || true
 			fi
 		fi
 	else
