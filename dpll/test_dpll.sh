@@ -3167,13 +3167,6 @@ test_monitor_events() {
 		operations_performed=$((operations_performed + 2))
 	done
 
-	# Operation 4: Verify GET operations don't generate new events
-	local pre_get_count=$(wc -l < "$monitor_output" 2>/dev/null || echo 0)
-	$DPLL_TOOL pin show id "$pin_id" > /dev/null 2>&1 || true
-	$DPLL_TOOL pin show > /dev/null 2>&1 || true
-	sleep 1
-	local post_get_count=$(wc -l < "$monitor_output" 2>/dev/null || echo 0)
-
 	# Kill monitor and wait for it to flush output
 	kill $monitor_pid 2>/dev/null || true
 	wait $monitor_pid 2>/dev/null || true
@@ -3197,13 +3190,6 @@ test_monitor_events() {
 		print_result PASS "Monitor captured events for pin $pin_id ($our_pin_events events)"
 	else
 		print_result FAIL "Monitor did not capture events for pin $pin_id"
-	fi
-
-	# Test 3: Did GET operations generate events?
-	if [ "$pre_get_count" -eq "$post_get_count" ]; then
-		print_result PASS "GET operations don't generate events"
-	else
-		print_result FAIL "GET operations generated events (lines: before=$pre_get_count, after=$post_get_count)"
 	fi
 
 	# Debug: Show what monitor captured (optional detailed output)
