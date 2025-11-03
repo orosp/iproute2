@@ -2396,6 +2396,7 @@ test_phase_offset_monitoring() {
 				fi
 
 				# Compare with Python CLI
+				# Note: Phase-offset changes continuously, so mismatch is expected and only a warning
 				if [ -n "$PYTHON_CLI" ]; then
 					local python_output="$TEST_DIR/python_pin_${pin_with_phase}_phase.json"
 					"$PYTHON_CLI" --spec "$DPLL_SPEC" --do pin-get --json "{\"id\": $pin_with_phase}" --output-json > "$python_output" 2>&1 || true
@@ -2405,7 +2406,9 @@ test_phase_offset_monitoring() {
 						if [ "$phase_offset" = "$phase_offset_python" ]; then
 							print_result PASS "Pin $pin_with_phase parent-device $parent_id phase-offset matches Python CLI"
 						else
-							print_result FAIL "Pin $pin_with_phase parent-device $parent_id phase-offset mismatch (dpll=$phase_offset, python=$phase_offset_python)"
+							# Phase-offset changes continuously - this is not a failure
+							local diff=$((phase_offset - phase_offset_python))
+							print_result WARN "Pin $pin_with_phase parent-device $parent_id phase-offset differs by $diff (dpll=$phase_offset, python=$phase_offset_python)"
 						fi
 					fi
 				fi
