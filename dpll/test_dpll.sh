@@ -2353,15 +2353,18 @@ test_phase_offset_monitoring() {
 
 		# Test SET operations if enabled
 		if [ $ENABLE_SET_OPERATIONS -eq 1 ]; then
-			if dpll_device_set_and_verify "$device_with_monitor" "phase-offset-monitor" "enable"; then
-				print_result PASS "Device $device_with_monitor set phase-offset-monitor to enable"
-			else
-				print_result SKIP "Device $device_with_monitor phase-offset-monitor SET (not supported)"
+			# Try to toggle the value (if enable, try disable; if disable, try enable)
+			local new_value="enable"
+			if [ "$monitor_state" = "enable" ]; then
+				new_value="disable"
 			fi
 
-			# Try to set back to original state
-			if [ "$monitor_state" = "disable" ]; then
-				dpll_device_set "$device_with_monitor" "phase-offset-monitor" "disable" >> "$ERROR_LOG" 2>&1
+			if dpll_device_set_and_verify "$device_with_monitor" "phase-offset-monitor" "$new_value"; then
+				print_result PASS "Device $device_with_monitor phase-offset-monitor SET works ($monitor_state -> $new_value)"
+				# Restore original value
+				dpll_device_set "$device_with_monitor" "phase-offset-monitor" "$monitor_state" >> "$ERROR_LOG" 2>&1
+			else
+				print_result SKIP "Device $device_with_monitor phase-offset-monitor SET (not supported or failed)"
 			fi
 		fi
 	else
