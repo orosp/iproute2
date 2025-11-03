@@ -16,12 +16,35 @@ The test suite verifies:
 
 - dpll tool built and executable
 - DPLL kernel module loaded
+- **Root/CAP_NET_ADMIN capability** for accessing DPLL devices
+  - Tests can run without permissions (will show warnings and skip device-specific tests)
+  - For full device testing, run with `sudo` or appropriate capabilities
 - Optional: Python YNL CLI for comparison testing
   - Located at: `tools/net/ynl/cli.py` in kernel source
   - DPLL spec at: `Documentation/netlink/specs/dpll.yaml`
 - Optional: `jq` for JSON comparison
 
 ## Usage
+
+### Running with DPLL Hardware Access
+
+If your system has DPLL devices, you need root or CAP_NET_ADMIN capability:
+
+```bash
+# Run as root
+sudo ./test_dpll.sh
+
+# Or with capabilities
+sudo -E ./test_dpll.sh --enable-set
+```
+
+Without proper permissions, you'll see:
+```
+⚠ DPLL device access requires root/CAP_NET_ADMIN
+Run with sudo or appropriate capabilities to access DPLL devices
+```
+
+The test suite will continue running and test non-device functionality (help, version, error handling).
 
 ### Basic Usage (Read-Only Mode - Default)
 

@@ -147,6 +147,20 @@ FAILED_TESTS=0
 SKIPPED_TESTS=0
 DMESG_ERRORS=0
 
+# Grouped test tracking
+declare -A GROUP_RESULTS      # group_name -> pass/fail/skip
+declare -A GROUP_SUBTESTS     # group_name -> total count
+declare -A GROUP_FAILURES     # group_name -> list of failures
+CURRENT_GROUP=""
+GROUP_SUBTEST_COUNT=0
+GROUP_HAS_FAILURE=0
+
+# Detected DPLL devices info
+declare -a DETECTED_DEVICES   # Array of device IDs
+declare -A DEVICE_MODULES     # device_id -> module name
+declare -A DEVICE_PIN_COUNT   # device_id -> number of pins
+DPLL_ACCESS_ERROR=""          # Error message if detection failed
+
 # Create test directory
 mkdir -p "$TEST_DIR"
 
@@ -183,6 +197,88 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Detect DPLL devices in the system
+detect_dpll_devices() {
+	local device_list
+	local error_output
+
+	# Try to get device list, capture errors
+	error_output=$($DPLL_TOOL device show -j 2>&1)
+	local exit_code=$?
+
+	# Check for permission errors
+	if [ $exit_code -ne 0 ]; then
+		if echo "$error_output" | grep -qi "operation not permitted\|permission denied"; then
+			DPLL_ACCESS_ERROR="permission"
+			return 1
+		else
+			DPLL_ACCESS_ERROR="other: $error_output"
+			return 1
+		fi
+	fi
+
+	device_list="$error_output"
+
+	# Check if device list is empty (either no JSON, empty array, or no devices key)
+	local device_count=$(echo "$device_list" | jq -r '.device | length' 2>/dev/null || echo 0)
+
+	if [ -z "$device_list" ] || [ "$device_count" -eq 0 ]; then
+		DPLL_ACCESS_ERROR="no_devices"
+		return 1
+	fi
+
+	# Parse devices and store info
+	local device_ids=$(echo "$device_list" | jq -r '.device[].id' 2>/dev/null)
+
+	for dev_id in $device_ids; do
+		DETECTED_DEVICES+=("$dev_id")
+
+		# Get module name
+		local module=$(echo "$device_list" | jq -r ".device[] | select(.id == $dev_id) | .[\"module-name\"] // \"unknown\"" 2>/dev/null)
+		DEVICE_MODULES[$dev_id]="$module"
+
+		# Count pins for this device
+		local pin_list=$($DPLL_TOOL pin show -j 2>/dev/null)
+		local pin_count=$(echo "$pin_list" | jq -r '[.pin[] | select(.["parent-device"][]? .["parent-id"] == '$dev_id')] | length' 2>/dev/null || echo 0)
+		DEVICE_PIN_COUNT[$dev_id]=${pin_count:-0}
+	done
+}
+
+# Print detected devices info
+print_device_info() {
+	echo -e "${CYAN}${BOLD}Detected DPLL Devices:${NC}"
+	echo ""
+
+	if [ ${#DETECTED_DEVICES[@]} -eq 0 ]; then
+		case "$DPLL_ACCESS_ERROR" in
+			"permission")
+				echo -e "  ${YELLOW}⚠ DPLL device access requires root/CAP_NET_ADMIN${NC}"
+				echo -e "  ${DIM}Run with sudo or appropriate capabilities to access DPLL devices${NC}"
+				;;
+			"no_devices")
+				echo -e "  ${YELLOW}⚠ No DPLL devices found in the system${NC}"
+				echo -e "  ${DIM}Please ensure DPLL kernel module is loaded and hardware is available${NC}"
+				;;
+			other:*)
+				echo -e "  ${YELLOW}⚠ Failed to query DPLL devices${NC}"
+				echo -e "  ${DIM}${DPLL_ACCESS_ERROR#other: }${NC}"
+				;;
+			*)
+				echo -e "  ${RED}No devices detected${NC}"
+				;;
+		esac
+		echo ""
+		return
+	fi
+
+	for dev_id in "${DETECTED_DEVICES[@]}"; do
+		local module="${DEVICE_MODULES[$dev_id]}"
+		local pins="${DEVICE_PIN_COUNT[$dev_id]}"
+		echo -e "  ${BOLD}dpll${dev_id}${NC}: driver=${CYAN}${module}${NC}, pins=${pins}"
+	done
+	echo ""
+}
+
 # Print test header
 print_header() {
 	local title="$1"
@@ -194,6 +290,70 @@ print_header() {
 	printf "${CYAN}${BOX_V}${NC}${BOLD}%*s%s%*s${NC}${CYAN}${BOX_V}${NC}\n" $padding "" "$title" $((width - padding - ${#title})) ""
 	echo -e "${CYAN}${BOX_BL}$(printf '%*s' $width '' | tr ' ' "$BOX_H")${BOX_BR}${NC}"
 	echo ""
+}
+
+# Start a grouped test (multiple subtests counted as one)
+test_group_start() {
+	local group_name="$1"
+	CURRENT_GROUP="$group_name"
+	GROUP_SUBTEST_COUNT=0
+	GROUP_HAS_FAILURE=0
+	GROUP_FAILURES[$group_name]=""
+}
+
+# End grouped test and report aggregate result
+test_group_end() {
+	if [ -z "$CURRENT_GROUP" ]; then
+		return
+	fi
+
+	local group_name="$CURRENT_GROUP"
+	GROUP_SUBTESTS[$group_name]=$GROUP_SUBTEST_COUNT
+
+	# Determine overall result
+	if [ $GROUP_SUBTEST_COUNT -eq 0 ]; then
+		# No subtests run - mark as SKIP
+		GROUP_RESULTS[$group_name]="SKIP"
+		echo -e "  ${YELLOW}${SKIP_MARK}${NC} ${YELLOW}SKIP${NC} ${DIM}│${NC} ${DIM}$group_name (no subtests)${NC}"
+		SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+	elif [ $GROUP_HAS_FAILURE -eq 1 ]; then
+		# At least one failure
+		GROUP_RESULTS[$group_name]="FAIL"
+		echo -e "  ${RED}${BOLD}${CROSS}${NC} ${RED}FAIL${NC} ${DIM}│${NC} $group_name"
+		echo -e "    ${DIM}└─ Tested $GROUP_SUBTEST_COUNT items, failures:${NC}"
+		echo -e "       ${RED}${GROUP_FAILURES[$group_name]}${NC}"
+		FAILED_TESTS=$((FAILED_TESTS + 1))
+	else
+		# All passed
+		GROUP_RESULTS[$group_name]="PASS"
+		echo -e "  ${GREEN}${BOLD}${CHECK}${NC} ${GREEN}PASS${NC} ${DIM}│${NC} $group_name ${DIM}(tested $GROUP_SUBTEST_COUNT items)${NC}"
+		PASSED_TESTS=$((PASSED_TESTS + 1))
+	fi
+
+	TOTAL_TESTS=$((TOTAL_TESTS + 1))
+	CURRENT_GROUP=""
+}
+
+# Print result for grouped subtest (doesn't increment global counters)
+print_group_subtest_result() {
+	local status=$1
+	local item_id=$2
+	local details="$3"
+
+	GROUP_SUBTEST_COUNT=$((GROUP_SUBTEST_COUNT + 1))
+
+	if [ "$status" = "FAIL" ]; then
+		GROUP_HAS_FAILURE=1
+		if [ -z "${GROUP_FAILURES[$CURRENT_GROUP]}" ]; then
+			GROUP_FAILURES[$CURRENT_GROUP]="$item_id"
+		else
+			GROUP_FAILURES[$CURRENT_GROUP]="${GROUP_FAILURES[$CURRENT_GROUP]}, $item_id"
+		fi
+
+		if [ -n "$details" ]; then
+			GROUP_FAILURES[$CURRENT_GROUP]="${GROUP_FAILURES[$CURRENT_GROUP]} ($details)"
+		fi
+	fi
 }
 
 # Print test result
@@ -1190,14 +1350,23 @@ compare_json() {
 		return
 	fi
 
-	# Normalize JSON: sort keys and sort arrays in capabilities fields
+	# Normalize JSON: sort keys, sort arrays in capabilities fields, and remove dynamic values
 	# This makes the comparison order-independent for capability arrays
+	# Dynamic values that change over time are removed:
+	#   - temp: Device temperature (changes with thermal conditions)
+	#   - phase-offset: Phase offset in parent-device (changes continuously)
+	#   - fractional-frequency-offset: Fractional frequency offset (changes continuously)
 	local jq_normalize='
 		walk(
 			if type == "object" then
+				# Sort capabilities array if present
 				if .capabilities and (.capabilities | type == "array") then
 					.capabilities |= sort
-				else . end
+				else . end |
+				# Remove dynamic values that change over time
+				del(.temp) |
+				del(.["phase-offset"]) |
+				del(.["fractional-frequency-offset"])
 			else . end
 		)
 	'
@@ -2268,38 +2437,38 @@ test_pin_frequency_change() {
 		return
 	fi
 
-	dpll_load_pins || return
+	dpll_load_pins || {
+		print_result SKIP "Pin frequency change (failed to load pins)"
+		echo ""
+		return
+	}
 
-	local tested_rejection=0
-	local tested_change=0
-	local pass_count=0
-
-	# Test 1: Test rejection on pins WITHOUT frequency-supported
+	# Test 1: Test rejection on pins WITHOUT frequency-supported (grouped)
+	local pins_without_freq_support=()
 	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
-		if ! dpll_pin_has_attr "$pin_id" "frequency"; then
-			continue
-		fi
-
-		# Skip pins with frequency-supported (tested later)
-		if dpll_pin_has_attr "$pin_id" "frequency-supported"; then
-			continue
-		fi
-
-		tested_rejection=$((tested_rejection + 1))
-
-		# Pin WITHOUT frequency-supported: frequency change should FAIL
-		local invalid_freq=999999999
-		local test_name="Pin $pin_id frequency change (should reject - no frequency-supported)"
-
-		if dpll_pin_set "$pin_id" frequency "$invalid_freq" 2>> "$ERROR_LOG"; then
-			# Command succeeded when it should have failed
-			print_result FAIL "$test_name (incorrectly accepted change)"
-		else
-			# Command failed as expected
-			print_result PASS "$test_name (correctly rejected)"
-			pass_count=$((pass_count + 1))
+		if dpll_pin_has_attr "$pin_id" "frequency" && ! dpll_pin_has_attr "$pin_id" "frequency-supported"; then
+			pins_without_freq_support+=("$pin_id")
 		fi
 	done
+
+	if [ ${#pins_without_freq_support[@]} -gt 0 ]; then
+		test_group_start "All pins without frequency-supported correctly reject frequency change"
+
+		for pin_id in "${pins_without_freq_support[@]}"; do
+			# Pin WITHOUT frequency-supported: frequency change should FAIL
+			local invalid_freq=999999999
+
+			if dpll_pin_set "$pin_id" frequency "$invalid_freq" 2>> "$ERROR_LOG"; then
+				# Command succeeded when it should have failed
+				print_group_subtest_result FAIL "pin$pin_id" "incorrectly accepted change"
+			else
+				# Command failed as expected
+				print_group_subtest_result PASS "pin$pin_id"
+			fi
+		done
+
+		test_group_end
+	fi
 
 	# Test 2: Find ONE suitable pin for frequency change test
 	# (pin with frequency-supported and at least 2 supported frequencies)
@@ -2333,8 +2502,6 @@ test_pin_frequency_change() {
 		fi
 
 		if [ -n "$target_freq" ]; then
-			tested_change=1
-
 			# Perform frequency change test
 			local test_name="Pin $pin_id frequency change $current_freq -> $target_freq"
 
@@ -2344,7 +2511,6 @@ test_pin_frequency_change() {
 
 				if [ "$new_freq" = "$target_freq" ]; then
 					print_result PASS "$test_name"
-					pass_count=$((pass_count + 1))
 				else
 					print_result FAIL "$test_name (expected: $target_freq, got: $new_freq)"
 				fi
@@ -2354,14 +2520,11 @@ test_pin_frequency_change() {
 			else
 				print_result FAIL "$test_name (set command failed)"
 			fi
+		else
+			print_result SKIP "Pin frequency change (no pin with multiple supported frequencies)"
 		fi
-	fi
-
-	# Summary
-	if [ $tested_rejection -eq 0 ] && [ $tested_change -eq 0 ]; then
-		print_result SKIP "Pin frequency change (no pins with frequency attribute)"
-	elif [ $tested_change -eq 0 ]; then
-		print_result SKIP "Pin frequency change (no pin with multiple supported frequencies)"
+	else
+		print_result SKIP "Pin frequency change (no pin with frequency-supported and 2+ frequencies)"
 	fi
 
 	echo ""
@@ -2429,34 +2592,40 @@ test_pin_priority_capability() {
 test_pin_type_validation() {
 	print_header "Testing Pin Type Validation"
 
-	dpll_load_pins || return
+	dpll_load_pins || {
+		print_result SKIP "Pin type validation (failed to load pins)"
+		echo ""
+		return
+	}
 
-	local tested_count=0
-	local pass_count=0
-
-	# Test 1: Validate pin type values
+	# Test 1: Validate all pin type values (grouped)
+	local pins_with_type=()
 	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
 		if dpll_pin_has_attr "$pin_id" "type"; then
+			pins_with_type+=("$pin_id")
+		fi
+	done
+
+	if [ ${#pins_with_type[@]} -eq 0 ]; then
+		print_result SKIP "Pin type validation (no pins with type attribute)"
+	else
+		test_group_start "All pins have valid type enum values"
+
+		for pin_id in "${pins_with_type[@]}"; do
 			local pin_type=$(dpll_get_pin_attr "$pin_id" "type")
-			tested_count=$((tested_count + 1))
 
 			# Validate type is one of valid enum values (lowercase with hyphens)
 			case "$pin_type" in
 				mux|ext|synce-eth-port|int-oscillator|gnss)
-					print_result PASS "Pin $pin_id type is valid: $pin_type"
-					pass_count=$((pass_count + 1))
+					print_group_subtest_result PASS "pin$pin_id"
 					;;
 				*)
-					print_result FAIL "Pin $pin_id type has invalid value: $pin_type"
+					print_group_subtest_result FAIL "pin$pin_id" "invalid type: $pin_type"
 					;;
 			esac
-		fi
-	done
+		done
 
-	if [ $tested_count -eq 0 ]; then
-		print_result SKIP "Pin type validation (no pins with type attribute)"
-	else
-		print_result PASS "Validated $pass_count/$tested_count pin types"
+		test_group_end
 	fi
 
 	# Note: Direction is not a top-level pin attribute - it's part of parent-device
@@ -2489,37 +2658,49 @@ test_pin_type_validation() {
 test_pin_capabilities_detailed() {
 	print_header "Testing Pin Capabilities Detailed"
 
-	dpll_load_pins || return
+	dpll_load_pins || {
+		print_result SKIP "Pin capabilities validation (failed to load pins)"
+		echo ""
+		return
+	}
 
-	# Test 1: Validate capability values
-	local capability_count=0
-	local tested_pins=0
-
+	# Test 1: Validate all capability values (grouped)
+	local pins_with_caps=()
 	for pin_id in "${!DPLL_PIN_CACHE[@]}"; do
 		if dpll_pin_has_attr "$pin_id" "capabilities"; then
-			tested_pins=$((tested_pins + 1))
+			pins_with_caps+=("$pin_id")
+		fi
+	done
+
+	if [ ${#pins_with_caps[@]} -eq 0 ]; then
+		print_result SKIP "Pin capabilities validation (no pins with capabilities)"
+	else
+		test_group_start "All pins have valid capability enum values"
+
+		for pin_id in "${pins_with_caps[@]}"; do
 			local capabilities=$(dpll_get_pin_array_values "$pin_id" "capabilities")
+			local invalid_caps=""
 
 			for cap in $capabilities; do
-				capability_count=$((capability_count + 1))
 				# Validate capability is one of valid enum values (per DPLL spec)
 				# Note: frequency-can-change is NOT in spec, only these 3:
 				case "$cap" in
 					direction-can-change|priority-can-change|state-can-change)
-						print_result PASS "Pin $pin_id has valid capability: $cap"
 						;;
 					*)
-						print_result FAIL "Pin $pin_id has invalid capability: $cap"
+						invalid_caps+="$cap "
 						;;
 				esac
 			done
-		fi
-	done
 
-	if [ $tested_pins -eq 0 ]; then
-		print_result SKIP "Pin capabilities validation (no pins with capabilities)"
-	else
-		print_result PASS "Validated $capability_count capabilities across $tested_pins pins"
+			if [ -z "$invalid_caps" ]; then
+				print_group_subtest_result PASS "pin$pin_id"
+			else
+				print_group_subtest_result FAIL "pin$pin_id" "invalid caps: $invalid_caps"
+			fi
+		done
+
+		test_group_end
 	fi
 
 	# Test 2: Verify capability consistency with SET operations
@@ -3769,6 +3950,17 @@ print_summary() {
 	printf "${CYAN}${BOX_V}${NC}${BOLD}%-${width}s${NC}${CYAN}${BOX_V}${NC}\n" "                          TEST SUMMARY"
 	echo -e "${CYAN}${BOX_VR}$(printf '%*s' $width '' | tr ' ' "$BOX_H")${BOX_VL}${NC}"
 
+	# Print tested devices info
+	if [ ${#DETECTED_DEVICES[@]} -gt 0 ]; then
+		printf "${CYAN}${BOX_V}${NC}  ${BOLD}Tested Devices:${NC}%-${width}s${CYAN}${BOX_V}${NC}\n" ""
+		for dev_id in "${DETECTED_DEVICES[@]}"; do
+			local module="${DEVICE_MODULES[$dev_id]}"
+			local pins="${DEVICE_PIN_COUNT[$dev_id]}"
+			printf "${CYAN}${BOX_V}${NC}    ${DIM}•${NC} dpll%-2d: %-15s (%-2d pins)%-24s${CYAN}${BOX_V}${NC}\n" "$dev_id" "$module" "$pins" ""
+		done
+		echo -e "${CYAN}${BOX_VR}$(printf '%*s' $width '' | tr ' ' "$BOX_H")${BOX_VL}${NC}"
+	fi
+
 	# Calculate percentages
 	local pass_pct=0
 	local fail_pct=0
@@ -3879,6 +4071,10 @@ main() {
 	print_banner
 
 	check_prerequisites
+
+	# Detect and display DPLL devices
+	detect_dpll_devices
+	print_device_info
 	test_dpll_api_demo
 	test_help
 	test_version

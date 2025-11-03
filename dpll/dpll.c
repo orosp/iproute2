@@ -858,9 +858,7 @@ static int cmd_device_id_get_cb(const struct nlmsghdr *nlh, void *data)
 	if (tb[DPLL_A_ID]) {
 		__u32 id = mnl_attr_get_u32(tb[DPLL_A_ID]);
 		if (is_json_context()) {
-			open_json_object(NULL);
 			print_uint(PRINT_JSON, "id", NULL, id);
-			close_json_object();
 		} else {
 			printf("%u\n", id);
 		}
