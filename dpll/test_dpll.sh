@@ -3272,6 +3272,16 @@ test_monitor_python_parity() {
 
 	echo -e "  ${DIM}Testing pin $pin_id, attribute: $test_attr (current: $freq, change to: $alt_freq)${NC}"
 
+	# Pre-flush netlink buffers by running a short monitor session
+	# This clears any buffered events from previous tests
+	echo -e "  ${DIM}Flushing netlink event buffers...${NC}"
+	timeout 2 ./dpll monitor > /dev/null 2>&1 &
+	local flush_pid=$!
+	sleep 2
+	kill $flush_pid 2>/dev/null || true
+	wait $flush_pid 2>/dev/null || true
+	sleep 1
+
 	# Start both monitors
 	local c_monitor_out="$TEST_DIR/c_monitor.txt"
 	local py_monitor_out="$TEST_DIR/py_monitor.txt"
