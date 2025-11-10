@@ -11,13 +11,11 @@ ALLOBJS :=
 ifeq ($(HAVE_MNL),y)
 
 DPLLOBJ = dpll.o
-DPLLLINKOBJ = dpll_link.o
-TARGETS += dpll dpll_link
-ALLOBJS += dpll.o dpll_link.o
+TARGETS += dpll
+ALLOBJS += dpll.o
 
 # libmnl flags
 dpll.o: CFLAGS += -I../include -I../include/uapi
-dpll_link.o: CFLAGS += -I../include -I../include/uapi
 
 else
 $(warning "libmnl not found, skipping dpll tool build")
@@ -30,9 +28,6 @@ all: $(TARGETS) $(LIBS)
 
 dpll: $(DPLLOBJ) $(LIBNETLINK)
 	$(QUIET_LINK)$(CC) $^ $(LDFLAGS) $(LDLIBS) -o $@
-
-dpll_link: $(DPLLLINKOBJ)
-	$(QUIET_LINK)$(CC) $^ $(LDFLAGS) $(LDLIBS) -lmnl -o $@
 
 install: all
 	for i in $(TARGETS); \
