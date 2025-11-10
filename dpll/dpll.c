@@ -28,11 +28,12 @@
 #define pr_err(args...) fprintf(stderr, ##args)
 #define pr_out(args...) fprintf(stdout, ##args)
 
+int json;
+
 struct dpll {
 	struct mnlu_gen_socket nlg;
 	int argc;
 	char **argv;
-	bool json_output;
 };
 
 static volatile sig_atomic_t monitor_running = 1;
@@ -505,7 +506,7 @@ int main(int argc, char **argv)
 			ret = EXIT_SUCCESS;
 			goto dpll_free;
 		case 'j':
-			dpll->json_output = true;
+			json = 1;
 			break;
 		case 'p':
 			pretty = true;
@@ -521,8 +522,8 @@ int main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	new_json_obj_plain(dpll->json_output);
-	if (dpll->json_output)
+	new_json_obj_plain(json);
+	if (json)
 		open_json_object(NULL);
 
 	/* Skip netlink init for help commands */
@@ -552,7 +553,7 @@ dpll_fini:
 	if (need_nl)
 		dpll_fini(dpll);
 json_cleanup:
-	if (dpll->json_output)
+	if (json)
 		close_json_object();
 	delete_json_obj_plain();
 dpll_free:
@@ -1934,7 +1935,7 @@ static int cmd_monitor(struct dpll *dpll)
 		return ret;
 	}
 
-	if (!dpll->json_output) {
+	if (!json) {
 		pr_out("Monitoring DPLL events (Press Ctrl+C to stop)...\n");
 	}
 
@@ -1951,7 +1952,7 @@ static int cmd_monitor(struct dpll *dpll)
 		return -1;
 	}
 
-	if (dpll->json_output) {
+	if (json) {
 		open_json_array(PRINT_JSON, "monitor");
 	}
 
@@ -1987,7 +1988,7 @@ static int cmd_monitor(struct dpll *dpll)
 		}
 	}
 
-	if (dpll->json_output) {
+	if (json) {
 		close_json_array(PRINT_JSON, NULL);
 	}
 
