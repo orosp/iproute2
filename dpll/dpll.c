@@ -299,7 +299,7 @@ static int dpll_parse_attr_enum(struct dpll *dpll, struct nlmsghdr *nlh,
 	do {                                                                   \
 		if (tb[attr_id])                                               \
 			print_int(PRINT_ANY, name, format_str,                 \
-				  mnl_attr_get_u32(tb[attr_id]));              \
+				  *(__s32 *)mnl_attr_get_payload(tb[attr_id])); \
 	} while (0)
 
 #define DPLL_PR_UINT_FMT(tb, attr_id, name, format_str)                        \
