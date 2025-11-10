@@ -403,12 +403,8 @@ static __s64 mnl_attr_get_sint(const struct nlattr *attr)
 					}                                      \
 					__first = false;                       \
 				}                                              \
-				if (is_json_context()) {                       \
-					print_string(PRINT_JSON, NULL, NULL,   \
-						     name_func(__val));        \
-				} else {                                       \
-					pr_out(" %s", name_func(__val));       \
-				}                                              \
+				print_string(PRINT_ANY, NULL, " %s",           \
+					     name_func(__val));                                              \
 			}                                                      \
 		}                                                              \
 		if (__first)                                                   \
