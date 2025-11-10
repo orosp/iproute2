@@ -1277,7 +1277,7 @@ static void dpll_pin_print_attrs(struct nlattr **tb)
 	/* Print phase adjust range, granularity and current value */
 	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST_MIN, "phase-adjust-min");
 	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST_MAX, "phase-adjust-max");
-	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST_GRAN, "phase-adjust-gran");
+	DPLL_PR_UINT(tb, DPLL_A_PIN_PHASE_ADJUST_GRAN, "phase-adjust-gran");
 	DPLL_PR_INT(tb, DPLL_A_PIN_PHASE_ADJUST, "phase-adjust");
 
 	/* Print fractional frequency offset */
