@@ -1038,22 +1038,6 @@ static int ifname_map_rev_lookup(struct dl *dl, const char *bus_name,
 	return -ENOENT;
 }
 
-static int strtobool(const char *str, bool *p_val)
-{
-	bool val;
-
-	if (!strcmp(str, "true") || !strcmp(str, "1") ||
-	    !strcmp(str, "enable"))
-		val = true;
-	else if (!strcmp(str, "false") || !strcmp(str, "0") ||
-		 !strcmp(str, "disable"))
-		val = false;
-	else
-		return -EINVAL;
-	*p_val = val;
-	return 0;
-}
-
 static int ident_str_validate(char *str, unsigned int expected)
 {
 	if (!str)
@@ -1356,7 +1340,7 @@ static int dl_argv_bool(struct dl *dl, bool *p_val)
 		return -EINVAL;
 	}
 
-	err = strtobool(str, p_val);
+	err = str_to_bool(str, p_val);
 	if (err) {
 		pr_err("\"%s\" is not a valid boolean value\n", str);
 		return err;
@@ -3821,7 +3805,7 @@ static int cmd_dev_param_set(struct dl *dl)
 		mnl_attr_put_u32(nlh, DEVLINK_ATTR_PARAM_VALUE_DATA, val_u32);
 		break;
 	case MNL_TYPE_FLAG:
-		err = strtobool(dl->opts.param_value, &val_bool);
+		err = str_to_bool(dl->opts.param_value, &val_bool);
 		if (err)
 			goto err_param_value_parse;
 		if (val_bool == ctx.value.vbool)
@@ -5395,7 +5379,7 @@ static int cmd_port_param_set(struct dl *dl)
 		mnl_attr_put_u32(nlh, DEVLINK_ATTR_PARAM_VALUE_DATA, val_u32);
 		break;
 	case MNL_TYPE_FLAG:
-		err = strtobool(dl->opts.param_value, &val_bool);
+		err = str_to_bool(dl->opts.param_value, &val_bool);
 		if (err)
 			goto err_param_value_parse;
 		if (val_bool == ctx.value.vbool)
