@@ -805,8 +805,8 @@ static int cmd_device_show(struct dpll *dpll)
 
 	if (has_id)
 		return cmd_device_show_id(dpll, id);
-	else
-		return cmd_device_show_dump(dpll);
+
+	return cmd_device_show_dump(dpll);
 }
 
 static int cmd_device_set(struct dpll *dpll)
