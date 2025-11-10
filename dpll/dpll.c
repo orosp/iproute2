@@ -1055,7 +1055,6 @@ static void dpll_pin_print_freq_supported(struct nlattr *attr)
 				print_lluint(PRINT_JSON, "frequency-max", NULL,
 					     freq_max);
 		} else {
-			/* Legacy: if min == max, print single value, else print range */
 			pr_out("    ");
 			if (freq_min == freq_max) {
 				print_lluint(PRINT_FP, NULL, "%" PRIu64 " Hz\n",
@@ -1138,7 +1137,6 @@ static void dpll_pin_print_esync_freq_supported(struct nlattr *attr)
 				print_lluint(PRINT_JSON, "frequency-max", NULL,
 					     freq_max);
 		} else {
-			/* Legacy: if min == max, print single value, else print range */
 			pr_out("    ");
 			if (freq_min == freq_max) {
 				print_lluint(PRINT_FP, NULL, "%" PRIu64 " Hz\n",
