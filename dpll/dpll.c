@@ -47,6 +47,28 @@ static const char *str_enable_disable(bool v)
 	return v ? "enable" : "disable";
 }
 
+static struct str_num_map pin_state_map[] = {
+	{ .str = "connected", .num = DPLL_PIN_STATE_CONNECTED },
+	{ .str = "disconnected", .num = DPLL_PIN_STATE_DISCONNECTED },
+	{ .str = "selectable", .num = DPLL_PIN_STATE_SELECTABLE },
+	{ .str = NULL, },
+};
+
+static struct str_num_map pin_type_map[] = {
+	{ .str = "mux", .num = DPLL_PIN_TYPE_MUX },
+	{ .str = "ext", .num = DPLL_PIN_TYPE_EXT },
+	{ .str = "synce-eth-port", .num = DPLL_PIN_TYPE_SYNCE_ETH_PORT },
+	{ .str = "int-oscillator", .num = DPLL_PIN_TYPE_INT_OSCILLATOR },
+	{ .str = "gnss", .num = DPLL_PIN_TYPE_GNSS },
+	{ .str = NULL, },
+};
+
+static struct str_num_map pin_direction_map[] = {
+	{ .str = "input", .num = DPLL_PIN_DIRECTION_INPUT },
+	{ .str = "output", .num = DPLL_PIN_DIRECTION_OUTPUT },
+	{ .str = NULL, },
+};
+
 static int dpll_argc(struct dpll *dpll)
 {
 	return dpll->argc;
@@ -109,33 +131,25 @@ static bool dpll_no_arg(struct dpll *dpll)
 	return dpll_argc(dpll) == 0;
 }
 
-static int str_to_dpll_pin_state(const char *s, __u32 *v)
+static int str_to_dpll_pin_state(const char *state_str, __u32 *state)
 {
-	if (!strcmp(s, "connected"))
-		*v = DPLL_PIN_STATE_CONNECTED;
-	else if (!strcmp(s, "disconnected"))
-		*v = DPLL_PIN_STATE_DISCONNECTED;
-	else if (!strcmp(s, "selectable"))
-		*v = DPLL_PIN_STATE_SELECTABLE;
-	else
-		return -EINVAL;
+	int num;
+
+	num = str_map_lookup_str(pin_state_map, state_str);
+	if (num < 0)
+		return num;
+	*state = num;
 	return 0;
 }
 
-static int str_to_dpll_pin_type(const char *s, __u32 *type)
+static int str_to_dpll_pin_type(const char *type_str, __u32 *type)
 {
-	if (!strcmp(s, "mux"))
-		*type = DPLL_PIN_TYPE_MUX;
-	else if (!strcmp(s, "ext"))
-		*type = DPLL_PIN_TYPE_EXT;
-	else if (!strcmp(s, "synce-eth-port"))
-		*type = DPLL_PIN_TYPE_SYNCE_ETH_PORT;
-	else if (!strcmp(s, "int-oscillator"))
-		*type = DPLL_PIN_TYPE_INT_OSCILLATOR;
-	else if (!strcmp(s, "gnss"))
-		*type = DPLL_PIN_TYPE_GNSS;
-	else
-		return -EINVAL;
+	int num;
+
+	num = str_map_lookup_str(pin_type_map, type_str);
+	if (num < 0)
+		return num;
+	*type = num;
 	return 0;
 }
 
@@ -154,15 +168,16 @@ static int dpll_parse_state(struct dpll *dpll, __u32 *state)
 
 static int dpll_parse_direction(struct dpll *dpll, __u32 *direction)
 {
-	if (dpll_argv_match_inc(dpll, "input")) {
-		*direction = DPLL_PIN_DIRECTION_INPUT;
-	} else if (dpll_argv_match_inc(dpll, "output")) {
-		*direction = DPLL_PIN_DIRECTION_OUTPUT;
-	} else {
-		pr_err("invalid direction: %s (use input/output)\n",
-		       dpll_argv(dpll));
-		return -EINVAL;
+	const char *str = dpll_argv(dpll);
+	int num;
+
+	num = str_map_lookup_str(pin_direction_map, str);
+	if (num < 0) {
+		pr_err("invalid direction: %s (use input/output)\n", str);
+		return num;
 	}
+	*direction = num;
+	dpll_arg_inc(dpll);
 	return 0;
 }
 
@@ -965,46 +980,26 @@ static void cmd_pin_help(void)
 
 static const char *dpll_pin_type_name(__u32 type)
 {
-	switch (type) {
-	case DPLL_PIN_TYPE_MUX:
-		return "mux";
-	case DPLL_PIN_TYPE_EXT:
-		return "ext";
-	case DPLL_PIN_TYPE_SYNCE_ETH_PORT:
-		return "synce-eth-port";
-	case DPLL_PIN_TYPE_INT_OSCILLATOR:
-		return "int-oscillator";
-	case DPLL_PIN_TYPE_GNSS:
-		return "gnss";
-	default:
-		return "unknown";
-	}
+	const char *str;
+
+	str = str_map_lookup_uint(pin_type_map, type);
+	return str ? str : "unknown";
 }
 
 static const char *dpll_pin_state_name(__u32 state)
 {
-	switch (state) {
-	case DPLL_PIN_STATE_CONNECTED:
-		return "connected";
-	case DPLL_PIN_STATE_DISCONNECTED:
-		return "disconnected";
-	case DPLL_PIN_STATE_SELECTABLE:
-		return "selectable";
-	default:
-		return "unknown";
-	}
+	const char *str;
+
+	str = str_map_lookup_uint(pin_state_map, state);
+	return str ? str : "unknown";
 }
 
 static const char *dpll_pin_direction_name(__u32 direction)
 {
-	switch (direction) {
-	case DPLL_PIN_DIRECTION_INPUT:
-		return "input";
-	case DPLL_PIN_DIRECTION_OUTPUT:
-		return "output";
-	default:
-		return "unknown";
-	}
+	const char *str;
+
+	str = str_map_lookup_uint(pin_direction_map, direction);
+	return str ? str : "unknown";
 }
 
 static void dpll_pin_capabilities_name(__u32 capabilities)
