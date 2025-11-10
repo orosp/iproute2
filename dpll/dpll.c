@@ -236,7 +236,7 @@ static int dpll_parse_attr_s32(struct dpll *dpll, struct nlmsghdr *nlh,
 		pr_err("invalid %s: %s\n", arg_name, str);
 		return -EINVAL;
 	}
-	mnl_attr_put_u32(nlh, attr_id, val);
+	mnl_attr_put(nlh, attr_id, sizeof(val), &val);
 	return 0;
 }
 
