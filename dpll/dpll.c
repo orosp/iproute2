@@ -19,7 +19,7 @@
 #include <linux/genetlink.h>
 #include <libmnl/libmnl.h>
 
-#include "../devlink/mnlg.h"
+#include <mnlg.h>
 #include "mnl_utils.h"
 #include "version.h"
 #include "utils.h"
@@ -40,18 +40,6 @@ static volatile sig_atomic_t monitor_running = 1;
 static void monitor_sig_handler(int signo __attribute__((unused)))
 {
 	monitor_running = 0;
-}
-
-static int str_to_bool(const char *s, bool *val)
-{
-	if (!strcmp(s, "true") || !strcmp(s, "1") || !strcmp(s, "enable"))
-		*val = true;
-	else if (!strcmp(s, "false") || !strcmp(s, "0") ||
-		 !strcmp(s, "disable"))
-		*val = false;
-	else
-		return -EINVAL;
-	return 0;
 }
 
 static const char *str_enable_disable(bool v)

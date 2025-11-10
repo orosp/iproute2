@@ -10,7 +10,7 @@ ALLOBJS :=
 # Check if libmnl is available
 ifeq ($(HAVE_MNL),y)
 
-DPLLOBJ = dpll.o ../devlink/mnlg.o
+DPLLOBJ = dpll.o
 DPLLLINKOBJ = dpll_link.o
 TARGETS += dpll dpll_link
 ALLOBJS += dpll.o dpll_link.o
