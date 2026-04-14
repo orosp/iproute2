@@ -2216,6 +2216,7 @@ static int cmd_monitor_cb(const struct nlmsghdr *nlh, void *data)
 		break;
 	}
 
+	fflush(stdout);
 	return ret;
 }
 
